@@ -16,32 +16,39 @@ from igibson.render.profiler import Profiler
 from igibson.utils.assets_utils import download_assets, download_demo_data
 
 # 动作计算函数
-def compute_action(state, dist_tol):
-    """根据当前观测，计算前进和转向指令。"""
+def compute_action(state, dist_tol, turn_direction):
+    """先原地对准目标，再直行；旋转只允许指定方向。"""
+    if turn_direction not in ("left", "right"):
+        raise ValueError("turn_direction 必须为 left 或 right")
 
-    # task_obs 的前两项：目标相对距离和目标相对方向角
     distance = float(state["task_obs"][0])
     angle = float(state["task_obs"][1])
 
-    # 将方向角转换到 [-pi, pi] 范围
+    # 将目标相对方向角转换到 [-pi, pi]
     angle = np.arctan2(np.sin(angle), np.cos(angle))
 
-    # 已进入目标距离容差时，发送零动作
+    # 已进入目标距离容差，停止运动
     if distance < dist_tol:
         return np.zeros(2, dtype=np.float32)
 
-    # 根据方向偏差计算转向指令，并限制幅度
-    turn_cmd = np.clip(0.8 * angle, -0.3, 0.3)
+    angle_tol = 0.3  # 弧度，约 17.2 度
 
-    # 朝向偏差大于 0.3 弧度（约 17 度）时，先原地转向
-    if abs(angle) > 0.3:
-        forward_cmd = 0.0
-    else:
-        # 朝向合适时前进，接近目标时减小前进指令
+    # 已对准：只前进，不转向
+    if abs(angle) <= angle_tol:
         forward_cmd = min(0.2, 0.5 * distance)
+        return np.array([forward_cmd, 0.0], dtype=np.float32)
 
-    # 动作顺序：[前进指令, 转向指令]
-    return np.array([forward_cmd, turn_cmd], dtype=np.float32)
+    # 未对准：沿指定方向原地旋转，必要时绕较长的一圈
+    # 按正转向指令为左转、负转向指令为右转的约定
+    if turn_direction == "left":
+        remaining_angle = angle % (2 * np.pi)
+        turn_sign = 1.0
+    else:
+        remaining_angle = (-angle) % (2 * np.pi)
+        turn_sign = -1.0
+
+    turn_cmd = turn_sign * min(0.3, 0.8 * remaining_angle)
+    return np.array([0.0, turn_cmd], dtype=np.float32)
 
 # 程序主函数
 def main(selection="user", headless=False, short_exec=False):
@@ -88,9 +95,14 @@ def main(selection="user", headless=False, short_exec=False):
         dist_tol = float(config_data.get("dist_tol", 0.36))
         max_steps = int(config_data.get("max_step", 500))
 
+        turn_direction = str(config_data.get("turn_direction", "left")).strip().lower()
+        if turn_direction not in ("left", "right"):
+            raise ValueError("配置 turn_direction 必须为 left 或 right")
+        print("单向旋转模式：", turn_direction)
+
         for i in range(max_steps):
             # 根据当前观测计算动作，替代随机采样
-            action = compute_action(state, dist_tol)
+            action = compute_action(state, dist_tol, turn_direction)
 
             # 将动作限制在环境允许的范围内
             action = np.clip(
@@ -112,6 +124,7 @@ def main(selection="user", headless=False, short_exec=False):
                     f"step={i + 1}, "
                     f"distance={distance:.3f} m, "
                     f"angle={angle_deg:.1f} deg, "
+                    f"turn_direction={turn_direction}, "
                     f"action={action}"
                 )
 
