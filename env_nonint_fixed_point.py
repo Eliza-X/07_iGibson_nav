@@ -9,7 +9,6 @@ from sys import platform
 
 import yaml
 
-import igibson
 from igibson.envs.igibson_env import iGibsonEnv
 from igibson.utils.assets_utils import download_assets, download_demo_data
 
@@ -20,19 +19,18 @@ from closed_loop_controller import run_closed_loop
 # 程序主函数
 def main(selection="user", headless=False, short_exec=False):
     """
-    Creates an iGibson environment from a config file with a turtlebot in Rs (not interactive).
-    It steps the environment 100 times with random actions sampled from the action space,
-    using the Gym interface, resetting it 10 times.
+    Run one TurtleBot episode following configured waypoints or a single final goal.
+    headless disables the GUI; short_exec limits the controller to 10 steps.
     """
     print("*" * 80 + "\nDescription:" + main.__doc__ + "*" * 80)
-    # If they have not been downloaded before, download assets and Rs Gibson (non-interactive) models
-    download_assets()
-    download_demo_data()
-    # config_filename = os.path.join(igibson.configs_path, "turtlebot_static_nav.yaml")
     # 读取此脚本所在目录中的yaml文件
     config_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),"turtlebot_static_nav.yaml",)
     print("实际读取的配置文件：", config_filename)
-    config_data = yaml.load(open(config_filename, "r"), Loader=yaml.FullLoader)
+    with open(config_filename, "r", encoding="utf-8") as config_file:
+        config_data = yaml.safe_load(config_file)
+    download_assets()
+    if config_data.get("scene") == "gibson" and config_data.get("scene_id") == "Rs":
+        download_demo_data()
     # Reduce texture scale for Mac.
     if platform == "darwin":
         config_data["texture_scale"] = 0.5
@@ -42,27 +40,15 @@ def main(selection="user", headless=False, short_exec=False):
     config_data["enable_pbr"] = False
 
     env = iGibsonEnv(config_file=config_data, mode="gui_interactive" if not headless else "headless")
-    max_iterations = 10 if not short_exec else 1
 
     # 闭环控制器
     try:
-        run_closed_loop(env=env, config_data=config_data, action_fn=compute_action)
+        controller_config = dict(config_data)
+        if short_exec:
+            controller_config["max_step"] = min(10, int(config_data.get("max_step", 500)))
+        return run_closed_loop(env=env, config_data=controller_config, action_fn=compute_action)
     finally:
         env.close()
-
-    # 随机动作代码
-    # for j in range(max_iterations):
-    #     print("Resetting environment")
-    #     env.reset()
-    #     for i in range(100):
-    #         with Profiler("Environment action step"):
-    #             action = env.action_space.sample()
-    #             state, reward, done, info = env.step(action)
-    #             if done:
-    #                 print("Episode finished after {} timesteps".format(i + 1))
-    #                 break
-    # env.close()
-
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

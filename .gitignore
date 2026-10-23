@@ -1,0 +1,4 @@
+/env_nonint_example_get_fixed_point.py
+__pycache__/
+.pytest_cache/
+/logs/

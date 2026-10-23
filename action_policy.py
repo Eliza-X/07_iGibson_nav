@@ -4,13 +4,13 @@ import numpy as np
 
 
 # 动作计算函数
-def compute_action(state, dist_tol, turn_direction):
+def compute_action(distance, angle_error, dist_tol, turn_direction):
     """先原地对准目标，再直行；旋转只允许指定方向。"""
     if turn_direction not in ("left", "right"):
         raise ValueError("turn_direction 必须为 left 或 right")
 
-    distance = float(state["task_obs"][0])
-    angle = float(state["task_obs"][1])
+    distance = float(distance)
+    angle = float(angle_error)
 
     # 将目标相对方向角转换到 [-pi, pi]
     angle = np.arctan2(np.sin(angle), np.cos(angle))

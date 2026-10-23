@@ -40,7 +40,14 @@ task: point_nav_fixed
 # 用于测试闭环控制的起终点
 initial_pos: [0.0, 0.0, 0.0]
 initial_orn: [0.0, 0.0, 0.0]
-target_pos: [2.0, 0.0, 0.0]
+target_pos: [1.0, 1.0, 0.0]
+# 手动 L 形路线；删除 waypoints 字段可恢复单点导航
+waypoints:
+  - [1.0, 0.0]
+  - [1.0, 1.0]
+waypoint_tolerance: 0.15
+visible_waypoints: true
+waypoint_log_dir: logs
 # 从随机位置项目中获取的起终点
 # 起始位置 [x, y, z]，单位：米
 # initial_pos: [0.10007858, -0.89992669, 0.02072859]
