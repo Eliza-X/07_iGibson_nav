@@ -1,0 +1,46 @@
+# Static path planning only. Coordinates below are candidates from the existing
+# repository; the program validates them against the loaded Rs navigation graph.
+scene: gibson
+scene_id: Rs
+build_graph: true
+floor_num: 0
+trav_map_resolution: 0.1
+trav_map_erosion: 2
+# The entry sets waypoint_resolution equal to trav_map_resolution (dense path).
+waypoint_resolution: 0.1
+load_texture: false
+pybullet_load_texture: false
+enable_shadow: false
+enable_pbr: false
+
+initial_pos: [0.10007858, -0.89992669, 0.02072859]
+target_pos: [-2.7, 2.5, -0.00876713]
+output_dir: outputs/path_planning
+
+# iGibsonEnv loads a robot/task, but the plotting entry never resets or steps it.
+robot:
+  name: Turtlebot
+  action_type: continuous
+  action_normalize: true
+  base_name: null
+  scale: 1.0
+  self_collision: false
+  rendering_params: null
+  controller_config:
+    base:
+      name: DifferentialDriveController
+task: point_nav_fixed
+initial_orn: [0.0, 0.0, 0.0]
+goal_format: polar
+task_obs_dim: 4
+reward_type: l2
+dist_tol: 0.1
+max_step: 500
+max_collisions_allowed: 500
+initial_pos_z_offset: 0.1
+output: [task_obs]
+image_width: 128
+image_height: 128
+vertical_fov: 45
+visible_target: false
+visible_path: false
