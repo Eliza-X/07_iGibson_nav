@@ -8,8 +8,8 @@ trav_map_resolution: 0.1
 trav_map_erosion: 2
 # The entry sets waypoint_resolution equal to trav_map_resolution (dense path).
 waypoint_resolution: 0.1
-load_texture: false
-pybullet_load_texture: false
+load_texture: True
+pybullet_load_texture: True
 enable_shadow: false
 enable_pbr: false
 
