@@ -17,13 +17,17 @@ def read_robot_pose(env):
     return [float(position[0]), float(position[1]), float(env.robots[0].get_rpy()[2])]
 
 
-def run_closed_loop(env, config_data, action_fn):
+def run_closed_loop(env, config_data, action_fn, observation_callback=None):
     """Run one episode; action_fn takes distance, angle, tolerance, turn direction.
 
     JSONL rows pair pre-action pose/error/action with post-action pose/events.
     The caller owns env.close(). Task targets and rewards remain unchanged.
+    Optional observation_callback(env) runs after reset and each step, including
+    the terminal step; it may update viewer state for the next viewer refresh.
     """
     env.reset()
+    if observation_callback is not None:
+        observation_callback(env)
     if env.action_space.shape != (2,):
         raise ValueError("TurtleBot requires a two-dimensional continuous action space")
     dist_tol = float(env.task.dist_tol)
@@ -66,6 +70,8 @@ def run_closed_loop(env, config_data, action_fn):
                           action_fn(distance, angle, tracker.current_tolerance, turn_direction))
                 action = np.clip(action, env.action_space.low, env.action_space.high).astype(np.float32)
                 _, reward, done, info = env.step(action)
+                if observation_callback is not None:
+                    observation_callback(env)
                 post_pose = read_robot_pose(env)
                 reached_after = tracker.update(post_pose)
                 visual.update(tracker)

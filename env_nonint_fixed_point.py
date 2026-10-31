@@ -15,6 +15,35 @@ from closed_loop_controller import run_closed_loop
 from plot_fixed_point_path import plan_path
 
 
+def update_follow_camera(env, back=1.5, side=0.6, height=1.2, look_height=0.25):
+    """Place ExternalView behind/left/above the robot (offsets in metres).
+
+    Positive side is the robot's left; negative side selects its right.
+    Following overrides manual camera movement on the next simulation step.
+    """
+    if env.mode == "headless":
+        return
+    viewer = getattr(getattr(env, "simulator", None), "viewer", None)
+    if viewer is None:
+        return
+    robot = env.robots[0]
+    position = np.asarray(robot.get_position(), dtype=float)
+    yaw = float(robot.get_rpy()[2])
+    forward = np.array([np.cos(yaw), np.sin(yaw), 0.0])
+    left = np.array([-np.sin(yaw), np.cos(yaw), 0.0])
+    camera = position - back * forward + side * left
+    camera[2] += height
+    direction = position + np.array([0.0, 0.0, look_height]) - camera
+    length = np.linalg.norm(direction)
+    if not np.isfinite(length) or length <= 0:
+        raise ValueError("Follow camera must have a finite, nonzero viewing direction")
+    direction /= length
+    viewer.px, viewer.py, viewer.pz = map(float, camera)
+    viewer.view_direction = direction
+    viewer.theta = float(np.arctan2(direction[1], direction[0]))
+    viewer.phi = float(np.arctan2(direction[2], np.linalg.norm(direction[:2])))
+
+
 def execution_waypoints(scene, result, config):
     """Keep graph nodes; allow endpoint connectors only inside one free cell.
 
@@ -39,10 +68,11 @@ def execution_waypoints(scene, result, config):
 
 
 # 程序主函数
-def main(selection="user", headless=False, short_exec=False):
+def main(selection="user", headless=False, short_exec=False, follow_camera=True):
     """
     Plan and execute one fixed-point TurtleBot episode in the same Gibson scene.
     headless disables the GUI; short_exec limits the environment and controller to 10 steps.
+    follow_camera keeps ExternalView behind the robot; disable for manual viewing.
     """
     print("*" * 80 + "\nDescription:" + main.__doc__ + "*" * 80)
     # 读取此脚本所在目录中的yaml文件
@@ -104,7 +134,10 @@ def main(selection="user", headless=False, short_exec=False):
               f"execution waypoints: {len(controller_config['waypoints'])}; "
               f"step budget: {controller_config['max_step']}")
         # run_closed_loop owns the only reset and reads the actual pose each step.
-        return run_closed_loop(env=env, config_data=controller_config, action_fn=compute_action)
+        return run_closed_loop(
+            env=env, config_data=controller_config, action_fn=compute_action,
+            observation_callback=update_follow_camera if follow_camera and not headless else None,
+        )
     finally:
         env.close()
 
