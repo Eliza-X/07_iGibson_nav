@@ -68,11 +68,13 @@ def execution_waypoints(scene, result, config):
 
 
 # 程序主函数
-def main(selection="user", headless=False, short_exec=False, follow_camera=True):
+def main(selection="user", headless=False, short_exec=False, follow_camera=True, show_route_map=True):
     """
     Plan and execute one fixed-point TurtleBot episode in the same Gibson scene.
     headless disables the GUI; short_exec limits the environment and controller to 10 steps.
     follow_camera keeps ExternalView behind the robot; disable for manual viewing.
+    show_route_map opens a live map and keeps the final trajectory until closed.
+    headless disables both camera following and the route-map window.
     """
     print("*" * 80 + "\nDescription:" + main.__doc__ + "*" * 80)
     # 读取此脚本所在目录中的yaml文件
@@ -119,10 +121,11 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True)
 
     env = iGibsonEnv(config_file=config_data, mode="gui_interactive" if not headless else "headless")
 
+    route_map = None
     # 闭环控制器
     try:
         # Validate and plan before reset: task reset itself may query the graph.
-        _, result = plan_path(env.scene, config_data)
+        floor_map, result = plan_path(env.scene, config_data)
         if (env.task.floor_num != floor
                 or not np.allclose(env.task.initial_pos, config_data["initial_pos"], atol=1e-8, rtol=0)
                 or not np.allclose(env.task.target_pos, config_data["target_pos"], atol=1e-8, rtol=0)):
@@ -133,14 +136,36 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True)
               f"graph nodes: {len(result['path_world_xy'])}; "
               f"execution waypoints: {len(controller_config['waypoints'])}; "
               f"step budget: {controller_config['max_step']}")
+        if show_route_map and not headless:
+            from live_path_visualization import LivePathVisualization
+            route_map = LivePathVisualization(env.scene, floor_map, result)
+
+        def update_observers(current_env):
+            if follow_camera and not headless:
+                update_follow_camera(current_env)
+            if route_map is not None:
+                route_map.update(current_env)
+
         # run_closed_loop owns the only reset and reads the actual pose each step.
-        return run_closed_loop(
+        summary = run_closed_loop(
             env=env, config_data=controller_config, action_fn=compute_action,
-            observation_callback=update_follow_camera if follow_camera and not headless else None,
+            observation_callback=update_observers,
         )
+        if route_map is not None:
+            route_map.finish(env, summary)
+    except BaseException:
+        if route_map is not None:
+            route_map.close()
+        raise
     finally:
         env.close()
+    if route_map is not None:
+        try:
+            route_map.wait_until_closed()
+        finally:
+            route_map.close()
+    return summary
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    main()
+    main(follow_camera=True, show_route_map=True)
