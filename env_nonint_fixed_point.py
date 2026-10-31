@@ -7,27 +7,75 @@ import logging
 import os
 from sys import platform
 
+import numpy as np
 import yaml
-
-from igibson.envs.igibson_env import iGibsonEnv
-from igibson.utils.assets_utils import download_assets, download_demo_data
 
 from action_policy import compute_action
 from closed_loop_controller import run_closed_loop
+from plot_fixed_point_path import plan_path
+
+
+def execution_waypoints(scene, result, config):
+    """Keep graph nodes; allow endpoint connectors only inside one free cell.
+
+    This is a navigation-map check, not a robot-footprint collision guarantee.
+    """
+    points = np.asarray(result["path_world_xy"], dtype=float)
+    if points.ndim != 2 or points.shape[1] != 2 or not len(points) or not np.isfinite(points).all():
+        raise ValueError("Planner must return a nonempty finite XY path")
+    floor = config["floor_num"]
+    for name, node in (("initial_pos", points[0]), ("target_pos", points[-1])):
+        endpoint = np.asarray(config[name], dtype=float)[:2]
+        if (not scene.has_node(floor, endpoint)
+                or not scene.has_node(floor, node)
+                or not np.array_equal(scene.world_to_map(endpoint), scene.world_to_map(node))
+                or np.linalg.norm(endpoint - node) > np.sqrt(2) * scene.trav_map_resolution + 1e-8):
+            raise ValueError(f"{name} cannot be safely connected within its traversable map cell")
+    waypoints = points.tolist()
+    target = list(config["target_pos"][:2])
+    if not np.array_equal(points[-1], target):
+        waypoints.append(target)
+    return waypoints
 
 
 # 程序主函数
 def main(selection="user", headless=False, short_exec=False):
     """
-    Run one TurtleBot episode following configured waypoints or a single final goal.
-    headless disables the GUI; short_exec limits the controller to 10 steps.
+    Plan and execute one fixed-point TurtleBot episode in the same Gibson scene.
+    headless disables the GUI; short_exec limits the environment and controller to 10 steps.
     """
     print("*" * 80 + "\nDescription:" + main.__doc__ + "*" * 80)
     # 读取此脚本所在目录中的yaml文件
-    config_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),"turtlebot_static_nav.yaml",)
+    config_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixed_point_path.yaml")
     print("实际读取的配置文件：", config_filename)
     with open(config_filename, "r", encoding="utf-8") as config_file:
         config_data = yaml.safe_load(config_file)
+    if not isinstance(config_data, dict) or config_data.get("scene") != "gibson" or config_data.get("build_graph") is not True:
+        raise ValueError("Execution requires scene: gibson and build_graph: true")
+    floor = config_data.get("floor_num", 0)
+    if isinstance(floor, bool) or not isinstance(floor, int) or floor != 0:
+        raise ValueError("The fixed-point execution task currently supports floor_num: 0 only")
+    if config_data.get("task") != "point_nav_fixed":
+        raise ValueError("Execution requires task: point_nav_fixed")
+    resolution = float(config_data.get("trav_map_resolution", 0.1))
+    if not np.isfinite(resolution) or resolution <= 0:
+        raise ValueError("trav_map_resolution must be finite and positive")
+    config_data["floor_num"] = floor
+    config_data["waypoint_resolution"] = resolution
+    config_data.setdefault("waypoint_tolerance", min(0.05, resolution / 2))
+    config_data.setdefault("turn_direction", "left")
+    config_data.setdefault("waypoint_log_dir", "logs")
+    config_data["visible_waypoints"] = not headless
+    config_data["visible_target"] = not headless
+    config_data["visible_path"] = False
+    # Planning's 500-step budget is too short for dense, slow waypoint execution.
+    config_data["max_step"] = 10 if short_exec else int(config_data.get("execution_max_step", 5000))
+    if config_data["max_step"] <= 0:
+        raise ValueError("execution_max_step must be positive")
+
+    from igibson.envs.igibson_env import iGibsonEnv
+    from igibson.utils.assets_utils import download_assets, download_demo_data
+
     download_assets()
     if config_data.get("scene") == "gibson" and config_data.get("scene_id") == "Rs":
         download_demo_data()
@@ -43,9 +91,19 @@ def main(selection="user", headless=False, short_exec=False):
 
     # 闭环控制器
     try:
+        # Validate and plan before reset: task reset itself may query the graph.
+        _, result = plan_path(env.scene, config_data)
+        if (env.task.floor_num != floor
+                or not np.allclose(env.task.initial_pos, config_data["initial_pos"], atol=1e-8, rtol=0)
+                or not np.allclose(env.task.target_pos, config_data["target_pos"], atol=1e-8, rtol=0)):
+            raise ValueError("Loaded task floor/start/goal differs from the planning configuration")
         controller_config = dict(config_data)
-        if short_exec:
-            controller_config["max_step"] = min(10, int(config_data.get("max_step", 500)))
+        controller_config["waypoints"] = execution_waypoints(env.scene, result, config_data)
+        print(f"Planned distance: {result['geodesic_distance_m']:.3f} m; "
+              f"graph nodes: {len(result['path_world_xy'])}; "
+              f"execution waypoints: {len(controller_config['waypoints'])}; "
+              f"step budget: {controller_config['max_step']}")
+        # run_closed_loop owns the only reset and reads the actual pose each step.
         return run_closed_loop(env=env, config_data=controller_config, action_fn=compute_action)
     finally:
         env.close()
