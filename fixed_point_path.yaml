@@ -13,8 +13,8 @@ pybullet_load_texture: True
 enable_shadow: false
 enable_pbr: false
 
-initial_pos: [0.10007858, -0.89992669, 0.02072859]
-target_pos: [-2.7, 2.5, -0.00876713]
+initial_pos: [0.5, -2.5, 0.02072859]
+target_pos: [0.5, -1.5, -0.00876713]
 output_dir: outputs/path_planning
 
 # iGibsonEnv loads a robot/task, but the plotting entry never resets or steps it.
@@ -30,7 +30,7 @@ robot:
     base:
       name: DifferentialDriveController
 task: point_nav_fixed
-initial_orn: [0.0, 0.0, 0.0]
+initial_orn: [0.0, 0.0, 1.57079632679]
 goal_format: polar
 task_obs_dim: 4
 reward_type: l2
