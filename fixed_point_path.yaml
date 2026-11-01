@@ -34,10 +34,12 @@ initial_orn: [0.0, 0.0, 1.57079632679]
 goal_format: polar
 task_obs_dim: 4
 reward_type: l2
+collision_reward_weight: -0.1
 dist_tol: 0.1
 max_step: 500000
 max_collisions_allowed: 500
 initial_pos_z_offset: 0.1
+collision_ignore_link_a_ids: [1, 2, 3, 4]  # ignore collisions with these robot links
 output: [task_obs]
 image_width: 128
 image_height: 128
