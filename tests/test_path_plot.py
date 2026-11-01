@@ -20,6 +20,9 @@ class Scene:
     def world_to_map(self, xy):
         return np.asarray(xy)[::-1].astype(int)
 
+    def map_to_world(self, rc):
+        return np.asarray(rc)[::-1].astype(float)
+
     def has_node(self, floor, xy):
         return bool(np.all(np.asarray(xy) >= 0) and np.all(np.asarray(xy) < 8))
 
@@ -32,17 +35,17 @@ def config():
     return dict(scene_id="test", floor_num=0, initial_pos=[1, 2, 0], target_pos=[2, 3, 0])
 
 
-def test_scene_call_and_plot_axes():
+def test_astar_output_and_plot_axes():
     scene = Scene()
     floor_map, result = plan_path(scene, config())
-    assert scene.calls[0][3] is True
-    np.testing.assert_equal(scene.calls[0][1], [1, 2])
-    assert result["path_map_rc"] == [[2, 1], [2, 2], [3, 2]]
+    assert not scene.calls
+    assert result["path_map_rc"] == [[2, 1], [3, 2]]
+    assert result["path_world_xy"] == [[1, 2], [2, 3]]
     fig = draw_path(floor_map, result)
     try:
         line = fig.axes[0].lines[0]
-        np.testing.assert_equal(line.get_xdata(), [1, 2, 2])
-        np.testing.assert_equal(line.get_ydata(), [2, 2, 3])
+        np.testing.assert_equal(line.get_xdata(), [1, 2])
+        np.testing.assert_equal(line.get_ydata(), [2, 3])
         assert fig.axes[0].images[0].origin == "upper"
     finally:
         import matplotlib.pyplot as plt
@@ -58,11 +61,12 @@ def test_bad_inputs_do_not_call_planner(change):
     assert not scene.calls
 
 
-def test_dense_path_required():
+def test_dense_path_independent_of_scene_interval():
     scene = Scene()
     scene.waypoint_interval = 2
-    with pytest.raises(ValueError, match="waypoint_resolution"):
-        plan_path(scene, config())
+    _, result = plan_path(scene, config())
+    assert result["path_map_rc"] == [[2, 1], [3, 2]]
+    assert not scene.calls
 
 
 def test_save_without_window(tmp_path, monkeypatch):
@@ -71,7 +75,7 @@ def test_save_without_window(tmp_path, monkeypatch):
     floor_map, result = plan_path(Scene(), config())
     png = save_and_show(floor_map, result, tmp_path, show=False)
     assert png.read_bytes().startswith(b"\x89PNG")
-    assert json.loads(png.with_suffix(".json").read_text())["geodesic_distance_m"] == 2.0
+    assert json.loads(png.with_suffix(".json").read_text())["geodesic_distance_m"] == pytest.approx(np.sqrt(2))
 
 
 def test_default_opens_blocking_window_after_save(tmp_path, monkeypatch):

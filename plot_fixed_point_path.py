@@ -1,4 +1,4 @@
-"""Plan with iGibson's scene API and display a static map; never execute actions."""
+"""Plan with the project grid A* planner and display a static map; never execute actions."""
 
 import argparse
 import json
@@ -8,44 +8,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-
-def plan_path(scene, config):
-    """Validate endpoints before the API can attach off-graph nodes."""
-    floor = config.get("floor_num", 0)
-    if isinstance(floor, bool) or not isinstance(floor, int):
-        raise ValueError("floor_num must be an integer")
-    maps = getattr(scene, "floor_map", [])
-    if not scene.build_graph or not 0 <= floor < len(maps):
-        raise ValueError("Navigation graph/map unavailable or floor_num out of range")
-    # One returned point per graph node avoids drawing shortcuts across corners.
-    if scene.waypoint_interval != 1:
-        raise ValueError("Set waypoint_resolution equal to trav_map_resolution")
-    endpoints = []
-    for name in ("initial_pos", "target_pos"):
-        point = np.asarray(config[name], dtype=float)
-        if point.shape not in ((2,), (3,)) or not np.isfinite(point).all():
-            raise ValueError(f"{name} must contain finite XY or XYZ coordinates")
-        xy = point[:2]
-        if not scene.has_node(floor, xy):
-            raise ValueError(f"{name} {xy.tolist()} is outside the traversable graph on floor {floor}; choose a valid point")
-        endpoints.append(xy)
-    path, distance = scene.get_shortest_path(floor, *endpoints, entire_path=True)
-    path = np.asarray(path, dtype=float)
-    if path.ndim != 2 or path.shape[1] != 2 or not len(path) or not np.isfinite(path).all():
-        raise ValueError("Scene returned an empty or invalid path")
-    if not np.isfinite(distance) or distance < 0:
-        raise ValueError("Scene returned an invalid geodesic distance")
-    # Official world_to_map accepts a single XY point, not a batch.
-    path_rc = [np.asarray(scene.world_to_map(xy)).tolist() for xy in path]
-    return np.asarray(maps[floor]).copy(), {
-        "scene_id": config["scene_id"], "floor_num": floor,
-        "initial_pos": list(config["initial_pos"]), "target_pos": list(config["target_pos"]),
-        "endpoint_map_rc": [np.asarray(scene.world_to_map(xy)).tolist() for xy in endpoints],
-        "path_world_xy": path.tolist(), "path_map_rc": path_rc,
-        "geodesic_distance_m": float(distance),
-        "trav_map_resolution": float(scene.trav_map_resolution),
-        "coordinate_note": "Map coordinates are [row, column]; endpoints are quantized to cells. No extra endpoint segments added.",
-    }
+from astar_planner import plan_path
 
 
 def draw_path(floor_map, result):
@@ -55,7 +18,7 @@ def draw_path(floor_map, result):
     ax.imshow(floor_map, cmap="gray", vmin=0, vmax=255, origin="upper", interpolation="nearest")
     route = np.asarray(result["path_map_rc"])
     endpoints = np.asarray(result["endpoint_map_rc"])
-    ax.plot(route[:, 1], route[:, 0], color="dodgerblue", linewidth=1.8, label="Scene shortest path")
+    ax.plot(route[:, 1], route[:, 0], color="dodgerblue", linewidth=1.8, label="A* planned path")
     for rc, color, marker, label in zip(endpoints, ["limegreen", "orangered"], ["o", "*"], ["Start (cell)", "Goal (cell)"]):
         ax.scatter(rc[1], rc[0], c=color, marker=marker, s=120, edgecolors="black", zorder=4, label=label)
     ax.set(title=f"{result['scene_id']} | floor {result['floor_num']} | {result['geodesic_distance_m']:.3f} m",

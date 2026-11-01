@@ -12,7 +12,7 @@ import yaml
 
 from action_policy import compute_action
 from closed_loop_controller import run_closed_loop
-from plot_fixed_point_path import plan_path
+from astar_planner import plan_path
 
 
 def update_follow_camera(env, back=1.5, side=0.6, height=1.2, look_height=0.25):

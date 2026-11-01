@@ -6,6 +6,8 @@ build_graph: true
 floor_num: 0
 trav_map_resolution: 0.1
 trav_map_erosion: 2
+planner_connectivity: 8  # 4: 上下左右；8: 包含对角方向
+planner_allow_corner_cutting: false  # 对角移动要求两侧栅格均可通行
 # The entry sets waypoint_resolution equal to trav_map_resolution (dense path).
 waypoint_resolution: 0.1
 load_texture: True
