@@ -14,7 +14,7 @@ enable_shadow: false
 enable_pbr: false
 
 initial_pos: [0.5, -2.5, 0.02072859]
-target_pos: [0.5, -1.5, -0.00876713]
+target_pos: [-0.3, 0.3, -0.00876713]
 output_dir: outputs/path_planning
 
 # iGibsonEnv loads a robot/task, but the plotting entry never resets or steps it.
