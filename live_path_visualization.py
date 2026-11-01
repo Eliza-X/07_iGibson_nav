@@ -8,7 +8,7 @@ from plot_fixed_point_path import draw_path
 
 
 class LivePathVisualization:
-    def __init__(self, scene, floor_map, result, refresh_hz=8):
+    def __init__(self, scene, floor_map, result, refresh_hz=8, *, waypoints=None, show_waypoints=True):
         import matplotlib.pyplot as plt
         from matplotlib.patches import FancyArrowPatch
 
@@ -32,6 +32,10 @@ class LivePathVisualization:
         self.fig.canvas.mpl_connect("close_event", self._on_close)
         self.ax = self.fig.axes[0]
         self.base_title = self.ax.get_title()
+        if show_waypoints and waypoints is not None and len(waypoints):
+            waypoint_rc = np.asarray([scene.world_to_map(np.asarray(xy)) for xy in waypoints])
+            self.ax.scatter(waypoint_rc[:, 1], waypoint_rc[:, 0], s=12,
+                            color="purple", edgecolors="none", label="Waypoints", zorder=3)
         self.trail, = self.ax.plot([], [], color="darkorange", linewidth=1.5,
                                    label="Actual trajectory", zorder=5)
         self.robot, = self.ax.plot([], [], "o", color="darkorange", markeredgecolor="black",

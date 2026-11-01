@@ -68,12 +68,14 @@ def execution_waypoints(scene, result, config):
 
 
 # 程序主函数
-def main(selection="user", headless=False, short_exec=False, follow_camera=True, show_route_map=True):
+def main(selection="user", headless=False, short_exec=False, follow_camera=True, show_route_map=True,
+         show_map_waypoints=True):
     """
     Plan and execute one fixed-point TurtleBot episode in the same Gibson scene.
     headless disables the GUI; short_exec limits the environment and controller to 10 steps.
     follow_camera keeps ExternalView behind the robot; disable for manual viewing.
     show_route_map opens a live map and keeps the final trajectory until closed.
+    show_map_waypoints toggles waypoint dots on that map only.
     headless disables both camera following and the route-map window.
     """
     print("*" * 80 + "\nDescription:" + main.__doc__ + "*" * 80)
@@ -138,7 +140,10 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
               f"step budget: {controller_config['max_step']}")
         if show_route_map and not headless:
             from live_path_visualization import LivePathVisualization
-            route_map = LivePathVisualization(env.scene, floor_map, result)
+            route_map = LivePathVisualization(
+                env.scene, floor_map, result, waypoints=controller_config["waypoints"],
+                show_waypoints=show_map_waypoints,
+            )
 
         def update_observers(current_env):
             if follow_camera and not headless:
@@ -168,4 +173,4 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    main(follow_camera=True, show_route_map=True)
+    main(follow_camera=True, show_route_map=True, show_map_waypoints=True)
