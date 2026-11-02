@@ -7,6 +7,16 @@ import numpy as np
 from plot_fixed_point_path import draw_path
 
 
+def world_to_map_float(scene, world_xy):
+    """iGibson world XY to continuous map RC, for display only.
+
+    Accept a single point or an array of points. Unlike world_to_map, this
+    preserves sub-cell positions; planning still uses integer map indices.
+    """
+    return (np.asarray(world_xy, dtype=float)[..., ::-1]
+            / scene.trav_map_resolution + scene.trav_map_size / 2.0)
+
+
 class LivePathVisualization:
     def __init__(self, scene, floor_map, result, refresh_hz=8, *, waypoints=None, show_waypoints=True):
         import matplotlib.pyplot as plt
@@ -18,7 +28,7 @@ class LivePathVisualization:
         self.scene = scene
         self.interval = 1.0 / refresh_hz
         self.last_draw = -float("inf")
-        self.history = []
+        self.history = []  # Measured world XY positions, without quantization.
         self.closed = False
         self.fig = draw_path(floor_map, result)
         # Agg/inline can save images but cannot provide a live desktop window.
@@ -57,17 +67,17 @@ class LivePathVisualization:
             return
         position = np.asarray(env.robots[0].get_position(), dtype=float)[:2]
         yaw = float(env.robots[0].get_rpy()[2])
-        # Convert both ends of the arrow: map axes need not match world axes.
-        rc = np.asarray(self.scene.world_to_map(position), dtype=float)
+        # Keep sub-cell positions for both the robot and its heading arrow.
+        rc = world_to_map_float(self.scene, position)
         ahead = position + 0.4 * np.array([np.cos(yaw), np.sin(yaw)])
-        ahead_rc = np.asarray(self.scene.world_to_map(ahead), dtype=float)
-        if not self.history or not np.array_equal(rc, self.history[-1]):
-            self.history.append(rc.copy())
+        ahead_rc = world_to_map_float(self.scene, ahead)
+        if not self.history or not np.array_equal(position, self.history[-1]):
+            self.history.append(position.copy())
         now = monotonic()
         if not force and now - self.last_draw < self.interval:
             return
         self.last_draw = now
-        history = np.asarray(self.history)
+        history = world_to_map_float(self.scene, self.history)
         self.trail.set_data(history[:, 1], history[:, 0])
         self.robot.set_data([rc[1]], [rc[0]])
         self.heading.set_positions(rc[::-1], ahead_rc[::-1])
