@@ -19,7 +19,7 @@ def compute_action(distance, angle_error, dist_tol, turn_direction):
     if distance < dist_tol:
         return np.zeros(2, dtype=np.float32)
 
-    angle_tol = 0.3  # 弧度，约 17.2 度
+    angle_tol = 0.1  # 弧度，约 5.73 度
 
     # 已对准：只前进，不转向
     if abs(angle) <= angle_tol:
@@ -35,5 +35,5 @@ def compute_action(distance, angle_error, dist_tol, turn_direction):
         remaining_angle = (-angle) % (2 * np.pi)
         turn_sign = -1.0
 
-    turn_cmd = turn_sign * min(1.7, 0.8 * remaining_angle)
+    turn_cmd = turn_sign * min(0.3, 0.8 * remaining_angle)
     return np.array([0.0, turn_cmd], dtype=np.float32)
