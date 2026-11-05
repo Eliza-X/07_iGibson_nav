@@ -21,6 +21,8 @@ def run_closed_loop(env, config_data, action_fn, observation_callback=None):
     """Run one episode; action_fn takes distance, angle, tolerance, turn direction.
 
     JSONL rows pair pre-action pose/error/action with post-action pose/events.
+    Policy angular commands mean positive yaw change; angular_action_sign maps
+    them to the environment. Logged actions are the mapped, clipped commands.
     The caller owns env.close(). Task targets and rewards remain unchanged.
     Optional observation_callback(env) runs after reset and each step, including
     the terminal step; it may update viewer state for the next viewer refresh.
@@ -38,6 +40,10 @@ def run_closed_loop(env, config_data, action_fn, observation_callback=None):
     turn_direction = str(config_data.get("turn_direction", "left")).strip().lower()
     if turn_direction not in ("left", "right", "shortest"):
         raise ValueError("turn_direction must be left, right or shortest")
+    angular_action_sign = config_data.get("angular_action_sign", 1.0)
+    if isinstance(angular_action_sign, bool) or angular_action_sign not in (-1.0, 1.0):
+        raise ValueError("angular_action_sign must be -1.0 or 1.0")
+    angular_action_sign = float(angular_action_sign)
 
     print("Task:", type(env.task).__name__, "source:", inspect.getfile(type(env.task)))
     print("Final target:", env.task.target_pos, "waypoints:", tracker.waypoints.tolist())
@@ -58,7 +64,8 @@ def run_closed_loop(env, config_data, action_fn, observation_callback=None):
             record({"type": "start", "waypoints": tracker.waypoints.tolist(),
                     "target_pos": np.asarray(env.task.target_pos).tolist(),
                     "dist_tol": dist_tol, "waypoint_tolerance": tracker.waypoint_tolerance,
-                    "turn_direction": turn_direction})
+                    "turn_direction": turn_direction,
+                    "angular_action_sign": angular_action_sign})
             for step in range(1, max_steps + 1):
                 pose = read_robot_pose(env)
                 reached_before = tracker.update(pose)
@@ -68,6 +75,8 @@ def run_closed_loop(env, config_data, action_fn, observation_callback=None):
                 distance, angle = (0.0, 0.0) if tracker.completed else compute_target_error(pose, target)
                 action = (np.zeros(2) if tracker.completed else
                           action_fn(distance, angle, tracker.current_tolerance, turn_direction))
+                action = np.array(action, dtype=float, copy=True)
+                action[1] *= angular_action_sign
                 action = np.clip(action, env.action_space.low, env.action_space.high).astype(np.float32)
                 _, reward, done, info = env.step(action)
                 if observation_callback is not None:

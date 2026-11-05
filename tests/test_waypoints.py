@@ -168,3 +168,42 @@ def test_ideal_kinematic_routes(tmp_path, points, direction):
     reached = [i for row in rows if row["type"] == "step"
                for i in row["reached_before"] + row["reached_after"]]
     assert reached == list(range(1 if points is None else len(points)))
+
+
+class ReversedYawEnv(FakeEnv):
+    def step(self, action):
+        # Match the measured environment: negative angular input increases yaw.
+        self.last_sent_action = np.array(action, copy=True)
+        return super().step([action[0], -action[1]])
+
+
+@pytest.mark.parametrize("target", [[1, 1], [1, -1]])
+def test_sign_mapping_converges_with_reversed_yaw_response(tmp_path, target):
+    env = ReversedYawEnv(target)
+    result, rows = run(env, tmp_path, turn_direction="shortest", angular_action_sign=-1.0)
+    assert result["accepted"]
+    assert rows[0]["angular_action_sign"] == -1.0
+    steps = [r for r in rows if r["type"] == "step"]
+    first = steps[0]
+    assert first["action"][1] * first["angle_error"] < 0
+    for row in steps:
+        if row["action"][1] != 0:
+            _, after_error = compute_target_error(row["pose_after"], row["waypoint"])
+            assert abs(after_error) < abs(row["angle_error"])
+    np.testing.assert_allclose(steps[-1]["action"], env.last_sent_action)
+
+
+def test_mapping_precedes_clipping_and_preserves_policy_output(tmp_path):
+    env = FakeEnv([1, 1], failure=True)
+    env.action_space.low = np.array([-1., -0.2])
+    env.action_space.high = np.array([1., 0.8])
+    policy_output = np.array([0.15, -0.5])
+    _, rows = run(env, tmp_path, action_fn=lambda *args: policy_output, angular_action_sign=-1.0)
+    np.testing.assert_allclose(rows[1]["action"], [0.15, 0.5])
+    np.testing.assert_allclose(policy_output, [0.15, -0.5])
+
+
+@pytest.mark.parametrize("sign", [0, 2, True, float("nan"), "-1"])
+def test_invalid_angular_action_sign(tmp_path, sign):
+    with pytest.raises(ValueError, match="angular_action_sign"):
+        run(FakeEnv([1, 0]), tmp_path, angular_action_sign=sign)

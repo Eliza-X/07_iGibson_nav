@@ -34,6 +34,7 @@ robot:
 task: point_nav_fixed
 initial_orn: [0.0, 0.0, 1.57079632679]
 turn_direction: shortest  # shortest: 最短角度转向；left: 固定左转；right: 固定右转
+angular_action_sign: -1.0  # 实测负指令使 yaw 增大；映射策略转向到环境动作
 goal_format: polar
 task_obs_dim: 4
 reward_type: l2
