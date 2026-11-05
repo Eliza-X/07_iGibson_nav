@@ -11,10 +11,13 @@ import yaml
 from astar_planner import plan_path
 
 
-def draw_path(floor_map, result):
+def draw_path(floor_map, result, fig=None):
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(9, 9))
+    if fig is None:
+        fig, ax = plt.subplots(figsize=(9, 9))
+    else:
+        ax = fig.subplots()
     ax.imshow(floor_map, cmap="gray", vmin=0, vmax=255, origin="upper", interpolation="nearest")
     route = np.asarray(result["path_map_rc"])
     endpoints = np.asarray(result["endpoint_map_rc"])

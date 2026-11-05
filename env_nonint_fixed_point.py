@@ -106,6 +106,10 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
     config_data["max_step"] = 10 if short_exec else int(config_data.get("execution_max_step", 5000))
     if config_data["max_step"] <= 0:
         raise ValueError("execution_max_step must be positive")
+    quad_enabled = bool(config_data.get("quad_view_enabled", False))
+    if quad_enabled:
+        config_data["image_width"] = int(config_data.get("video_panel_width", 640))
+        config_data["image_height"] = int(config_data.get("video_panel_height", 480))
 
     from igibson.envs.igibson_env import iGibsonEnv
     from igibson.utils.assets_utils import download_assets, download_demo_data
@@ -121,9 +125,12 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
     config_data["enable_shadow"] = False
     config_data["enable_pbr"] = False
 
-    env = iGibsonEnv(config_file=config_data, mode="gui_interactive" if not headless else "headless")
+    # Quad mode renders its own three cameras and owns one preview window.
+    env = iGibsonEnv(config_file=config_data,
+                     mode="gui_interactive" if not headless and not quad_enabled else "headless")
 
     route_map = None
+    recorder = None
     # 闭环控制器
     try:
         # Validate and plan before reset: task reset itself may query the graph.
@@ -138,7 +145,13 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
               f"graph nodes: {len(result['path_world_xy'])}; "
               f"execution waypoints: {len(controller_config['waypoints'])}; "
               f"step budget: {controller_config['max_step']}")
-        if show_route_map and not headless:
+        if quad_enabled:
+            from quad_view_recorder import QuadViewRecorder
+            recorder = QuadViewRecorder(
+                env, floor_map, result, controller_config["waypoints"], config_data,
+                preview=not headless, show_waypoints=show_map_waypoints,
+            )
+        elif show_route_map and not headless:
             from live_path_visualization import LivePathVisualization
             route_map = LivePathVisualization(
                 env.scene, floor_map, result, waypoints=controller_config["waypoints"],
@@ -146,6 +159,9 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
             )
 
         def update_observers(current_env):
+            if recorder is not None:
+                recorder.update(current_env)
+                return
             if follow_camera and not headless:
                 update_follow_camera(current_env)
             if route_map is not None:
@@ -158,12 +174,19 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
         )
         if route_map is not None:
             route_map.finish(env, summary)
+        if recorder is not None:
+            recorder.finish(env, summary)
+            summary["video_path"] = str(recorder.video_path) if recorder.video_path else None
     except BaseException:
         if route_map is not None:
             route_map.close()
         raise
     finally:
-        env.close()
+        try:
+            if recorder is not None:
+                recorder.close()
+        finally:
+            env.close()
     if route_map is not None:
         try:
             route_map.wait_until_closed()

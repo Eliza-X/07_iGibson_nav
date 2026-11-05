@@ -50,3 +50,14 @@ image_height: 128
 vertical_fov: 45
 visible_target: false
 visible_path: false
+
+# 四宫格展示；关闭后恢复原来的 Viewer 和独立路线图。
+quad_view_enabled: true
+record_video: true
+video_output_dir: outputs/videos
+video_panel_width: 640
+video_panel_height: 480
+video_final_hold_seconds: 2.0
+# 固定机位初始候选（世界 XYZ，米），需在 Rs 中预览确认遮挡情况。
+fixed_camera_position: [1.3, -3.0, 2.2]
+fixed_camera_target: [0.2, -1.2, 0.25]

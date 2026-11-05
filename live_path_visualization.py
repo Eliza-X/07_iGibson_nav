@@ -18,27 +18,37 @@ def world_to_map_float(scene, world_xy):
 
 
 class LivePathVisualization:
-    def __init__(self, scene, floor_map, result, refresh_hz=8, *, waypoints=None, show_waypoints=True):
+    def __init__(self, scene, floor_map, result, refresh_hz=8, *, waypoints=None, show_waypoints=True,
+                 display=True):
         import matplotlib.pyplot as plt
         from matplotlib.patches import FancyArrowPatch
 
         if not np.isfinite(refresh_hz) or refresh_hz <= 0:
             raise ValueError("refresh_hz must be finite and positive")
         self.plt = plt
+        self.display = display
         self.scene = scene
         self.interval = 1.0 / refresh_hz
         self.last_draw = -float("inf")
         self.history = []  # Measured world XY positions, without quantization.
         self.closed = False
-        self.fig = draw_path(floor_map, result)
+        if display:
+            self.fig = draw_path(floor_map, result)
+        else:
+            from matplotlib.figure import Figure
+            from matplotlib.backends.backend_agg import FigureCanvasAgg
+            self.fig = Figure(figsize=(6, 6), dpi=100)
+            FigureCanvasAgg(self.fig)
+            draw_path(floor_map, result, fig=self.fig)
         # Agg/inline can save images but cannot provide a live desktop window.
-        if self.fig.canvas.required_interactive_framework is None:
+        if display and self.fig.canvas.required_interactive_framework is None:
             plt.close(self.fig)
             raise RuntimeError(
                 "Live route map requires a desktop Matplotlib backend (TkAgg or QtAgg). "
                 "Install/enable Tk or Qt, or run main(show_route_map=False)."
             )
-        self.fig.canvas.manager.set_window_title("Live route map")
+        if display:
+            self.fig.canvas.manager.set_window_title("Live route map")
         self.fig.canvas.mpl_connect("close_event", self._on_close)
         self.ax = self.fig.axes[0]
         self.base_title = self.ax.get_title()
@@ -56,13 +66,14 @@ class LivePathVisualization:
         self.heading.set_visible(False)
         self.ax.legend(loc="upper right")
         self.ax.set_autoscale_on(False)
-        plt.show(block=False)
+        if display:
+            plt.show(block=False)
 
     def _on_close(self, event):
         self.closed = True
 
     def update(self, env, force=False):
-        if self.closed or not self.plt.fignum_exists(self.fig.number):
+        if self.closed or (self.display and not self.plt.fignum_exists(self.fig.number)):
             self.closed = True
             return
         position = np.asarray(env.robots[0].get_position(), dtype=float)[:2]
@@ -97,9 +108,17 @@ class LivePathVisualization:
 
     def wait_until_closed(self):
         """Keep the final trajectory visible after the simulation is released."""
-        if not self.closed and self.plt.fignum_exists(self.fig.number):
+        if self.display and not self.closed and self.plt.fignum_exists(self.fig.number):
             self.plt.show(block=True)
+
+    def frame_rgb(self):
+        """Render the latest map state to an independent uint8 RGB image."""
+        self.fig.canvas.draw()
+        return np.asarray(self.fig.canvas.buffer_rgba())[:, :, :3].copy()
 
     def close(self):
         self.closed = True
-        self.plt.close(self.fig)
+        if self.display:
+            self.plt.close(self.fig)
+        else:
+            self.fig.clear()
