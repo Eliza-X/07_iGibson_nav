@@ -56,6 +56,24 @@ def test_policy_preserves_fixed_turn_and_stop():
     np.testing.assert_allclose(compute_action(1, 0, 0.1, "left"), [0.2, 0])
 
 
+@pytest.mark.parametrize("degrees,sign", [(10, 1), (-10, -1), (350, -1), (-350, 1),
+                                         (179, 1), (181, -1), (-179, -1), (-181, 1),
+                                         (180, 1), (-180, 1)])
+def test_shortest_turn_direction(degrees, sign):
+    action = compute_action(1, np.deg2rad(degrees), 0.1, "shortest")
+    assert action[0] == 0
+    assert np.sign(action[1]) == sign
+    assert abs(float(action[1])) <= 0.3 + 1e-7
+
+
+def test_shortest_slows_near_heading_and_preserves_forward_stop():
+    small = compute_action(1, 0.12, 0.1, "shortest")[1]
+    large = compute_action(1, 0.3, 0.1, "shortest")[1]
+    assert 0 < small < large
+    np.testing.assert_allclose(compute_action(1, 0.05, 0.1, "shortest"), [0.2, 0])
+    np.testing.assert_array_equal(compute_action(0.01, 1, 0.1, "shortest"), [0, 0])
+
+
 class FakeTask:
     def __init__(self, target):
         self.target_pos = np.array([*target, 0.0])
@@ -142,7 +160,7 @@ def test_start_already_complete_sends_zero_action(tmp_path):
 
 @pytest.mark.parametrize("points", [None, [[0.5, 0], [1, 0]], [[1, 0], [1, 1]],
                                      [[1, 0], [1, 1], [2, 1]]])
-@pytest.mark.parametrize("direction", ["left", "right"])
+@pytest.mark.parametrize("direction", ["left", "right", "shortest"])
 def test_ideal_kinematic_routes(tmp_path, points, direction):
     target = [1, 0] if points is None else points[-1]
     result, rows = run(FakeEnv(target), tmp_path, points, turn_direction=direction)

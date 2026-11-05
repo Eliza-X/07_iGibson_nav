@@ -36,8 +36,8 @@ def run_closed_loop(env, config_data, action_fn, observation_callback=None):
     if max_steps <= 0:
         raise ValueError("max_step must be positive")
     turn_direction = str(config_data.get("turn_direction", "left")).strip().lower()
-    if turn_direction not in ("left", "right"):
-        raise ValueError("turn_direction must be left or right")
+    if turn_direction not in ("left", "right", "shortest"):
+        raise ValueError("turn_direction must be left, right or shortest")
 
     print("Task:", type(env.task).__name__, "source:", inspect.getfile(type(env.task)))
     print("Final target:", env.task.target_pos, "waypoints:", tracker.waypoints.tolist())

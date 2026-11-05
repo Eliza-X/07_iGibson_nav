@@ -33,7 +33,7 @@ robot:
       name: DifferentialDriveController
 task: point_nav_fixed
 initial_orn: [0.0, 0.0, 1.57079632679]
-turn_direction: right  # left: 左转；right: 右转
+turn_direction: shortest  # shortest: 最短角度转向；left: 固定左转；right: 固定右转
 goal_format: polar
 task_obs_dim: 4
 reward_type: l2
