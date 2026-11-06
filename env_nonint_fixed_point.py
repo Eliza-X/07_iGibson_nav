@@ -3,6 +3,7 @@
 yaml文件读取这个文件夹中的yaml文件
 """
 
+import argparse
 import logging
 import os
 from sys import platform
@@ -67,9 +68,17 @@ def execution_waypoints(scene, result, config):
     return waypoints
 
 
+def resolve_display_mode(config, override=None):
+    """Explicit argument wins over YAML; configs without a mode use classic."""
+    mode = override if override is not None else config.get("display_mode", "classic")
+    if mode not in ("video", "classic"):
+        raise ValueError("display_mode must be video or classic")
+    return mode
+
+
 # 程序主函数
 def main(selection="user", headless=False, short_exec=False, follow_camera=True, show_route_map=True,
-         show_map_waypoints=True):
+         show_map_waypoints=True, display_mode=None):
     """
     Plan and execute one fixed-point TurtleBot episode in the same Gibson scene.
     headless disables the GUI; short_exec limits the environment and controller to 10 steps.
@@ -77,6 +86,8 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
     show_route_map opens a live map and keeps the final trajectory until closed.
     show_map_waypoints toggles waypoint dots on that map only.
     headless disables both camera following and the route-map window.
+    display_mode overrides YAML: video records four views; classic uses original windows.
+    In video mode headless suppresses preview but still records the video.
     """
     print("*" * 80 + "\nDescription:" + main.__doc__ + "*" * 80)
     # 读取此脚本所在目录中的yaml文件
@@ -106,7 +117,12 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
     config_data["max_step"] = 10 if short_exec else int(config_data.get("execution_max_step", 5000))
     if config_data["max_step"] <= 0:
         raise ValueError("execution_max_step must be positive")
-    quad_enabled = bool(config_data.get("quad_view_enabled", False))
+    mode = resolve_display_mode(config_data, display_mode)
+    quad_enabled = mode == "video"
+    # Derive the recorder's internal flag solely from the selected mode.
+    config_data["display_mode"] = mode
+    config_data["record_video"] = quad_enabled
+    print(f"Display mode: {mode} | recording: {quad_enabled} | preview: {not headless}")
     if quad_enabled:
         config_data["image_width"] = int(config_data.get("video_panel_width", 640))
         config_data["image_height"] = int(config_data.get("video_panel_height", 480))
@@ -146,7 +162,12 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
               f"execution waypoints: {len(controller_config['waypoints'])}; "
               f"step budget: {controller_config['max_step']}")
         if quad_enabled:
-            from quad_view_recorder import QuadViewRecorder
+            try:
+                from quad_view_recorder import QuadViewRecorder
+            except ModuleNotFoundError as exc:
+                if exc.name == "cv2":
+                    raise RuntimeError("Quad view requires OpenCV: install opencv-python in the iGibson environment") from exc
+                raise
             recorder = QuadViewRecorder(
                 env, floor_map, result, controller_config["waypoints"], config_data,
                 preview=not headless, show_waypoints=show_map_waypoints,
@@ -194,6 +215,21 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
             route_map.close()
     return summary
 
+def cli(argv=None):
+    parser = argparse.ArgumentParser(description="Run navigation with classic windows or four-view video recording.")
+    parser.add_argument("--display-mode", choices=("video", "classic"), default=None,
+                        help="Override display_mode in fixed_point_path.yaml")
+    parser.add_argument("--headless", action="store_true", help="Disable windows; video mode still records")
+    parser.add_argument("--short-exec", action="store_true", help="Limit execution to 10 steps")
+    parser.add_argument("--no-follow-camera", action="store_true", help="Disable camera following in classic mode")
+    parser.add_argument("--no-route-map", action="store_true", help="Hide the separate map in classic mode")
+    parser.add_argument("--no-map-waypoints", action="store_true", help="Hide waypoint dots on the map")
+    args = parser.parse_args(argv)
+    return main(display_mode=args.display_mode, headless=args.headless, short_exec=args.short_exec,
+                follow_camera=not args.no_follow_camera, show_route_map=not args.no_route_map,
+                show_map_waypoints=not args.no_map_waypoints)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    main(follow_camera=True, show_route_map=True, show_map_waypoints=True)
+    cli()

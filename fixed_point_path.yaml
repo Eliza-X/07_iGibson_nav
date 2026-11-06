@@ -51,9 +51,8 @@ vertical_fov: 45
 visible_target: false
 visible_path: false
 
-# 四宫格展示；关闭后恢复原来的 Viewer 和独立路线图。
-quad_view_enabled: true
-record_video: true
+# video: 四宫格预览并录制 MP4；classic: 原有 Viewer 和独立地图，不录像。
+display_mode: classic
 video_output_dir: outputs/videos
 video_panel_width: 640
 video_panel_height: 480

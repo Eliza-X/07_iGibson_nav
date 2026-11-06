@@ -66,6 +66,9 @@ class LivePathVisualization:
         self.heading.set_visible(False)
         self.ax.legend(loc="upper right")
         self.ax.set_autoscale_on(False)
+        if not display:
+            # Updates add a second title line; reserve space in the video canvas.
+            self.fig.subplots_adjust(top=0.88)
         if display:
             plt.show(block=False)
 
