@@ -1,0 +1,15 @@
+﻿# 共用现有地图、机器人、规划和控制参数；单项任务禁止覆盖它们。
+base_config: fixed_point_path.yaml
+# 仅复用已有坐标提供往返候选，不代表已经验证可达或确认所属房间。
+# 确认其他房间坐标后，复制条目并填写 XYZ（米）与 RPY（弧度）。
+tasks:
+  - id: existing_forward
+    description: 现有起终点正向候选，待场景验证
+    initial_pos: [0.5, -2.5, 0.02072859]
+    initial_orn: [0.0, 0.0, 1.57079632679]
+    target_pos: [-0.3, 0.3, -0.00876713]
+  - id: existing_reverse
+    description: 现有起终点反向候选，待场景验证
+    initial_pos: [-0.3, 0.3, -0.00876713]
+    initial_orn: [0.0, 0.0, 1.57079632679]
+    target_pos: [0.5, -2.5, 0.02072859]

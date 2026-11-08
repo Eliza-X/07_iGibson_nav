@@ -28,7 +28,8 @@ def test_cli_arguments(monkeypatch):
 
 @pytest.mark.parametrize("mode", ["video", "classic"])
 @pytest.mark.parametrize("headless", [False, True])
-def test_main_selects_windows_recording_resolution_and_cleanup(monkeypatch, mode, headless):
+@pytest.mark.parametrize("wait_for_map", [False, True])
+def test_main_selects_windows_recording_resolution_and_cleanup(monkeypatch, mode, headless, wait_for_map):
     events = []
     config = dict(scene="gibson", scene_id="Rs", build_graph=True, task="point_nav_fixed",
                   initial_pos=[0, 0, 0], target_pos=[1, 1, 0], image_width=128, image_height=128,
@@ -92,7 +93,9 @@ def test_main_selects_windows_recording_resolution_and_cleanup(monkeypatch, mode
         return dict(accepted=True, reason="success", steps=1)
 
     monkeypatch.setattr(entry, "run_closed_loop", run)
-    summary = entry.main(display_mode=mode, headless=headless)
+    summary = entry.main(display_mode=mode, headless=headless, wait_for_map=wait_for_map,
+                         config_data=config)
+    assert "max_step" not in config  # Entry must not mutate the caller's config.
     _, env_mode, effective = events[0]
     assert env_mode == ("gui_interactive" if mode == "classic" and not headless else "headless")
     assert effective["display_mode"] == mode
@@ -108,4 +111,8 @@ def test_main_selects_windows_recording_resolution_and_cleanup(monkeypatch, mode
         assert ("map.create" in events) is (not headless)
         assert ("follow" in events) is (not headless)
         if not headless:
-            assert events.index("env.close") < events.index("map.wait") < events.index("map.close")
+            assert events.index("env.close") < events.index("map.close")
+            if wait_for_map:
+                assert events.index("env.close") < events.index("map.wait") < events.index("map.close")
+            else:
+                assert "map.wait" not in events

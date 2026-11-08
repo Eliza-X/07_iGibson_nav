@@ -41,6 +41,8 @@ reward_type: l2
 collision_reward_weight: -0.1
 dist_tol: 0.1
 max_step: 500000
+# 执行入口使用此预算；max_step 保留给其他直接读取配置的调用。
+execution_max_step: 5000
 max_collisions_allowed: 500
 initial_pos_z_offset: 0.1
 collision_ignore_link_a_ids: [1, 2, 3, 4]  # ignore collisions with these robot links

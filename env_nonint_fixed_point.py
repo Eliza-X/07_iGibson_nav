@@ -4,6 +4,7 @@ yaml文件读取这个文件夹中的yaml文件
 """
 
 import argparse
+import copy
 import logging
 import os
 from sys import platform
@@ -14,6 +15,10 @@ import yaml
 from action_policy import compute_action
 from closed_loop_controller import run_closed_loop
 from astar_planner import plan_path
+
+
+class EnvironmentSetupError(RuntimeError):
+    """A shared dependency or scene could not be loaded."""
 
 
 def update_follow_camera(env, back=1.5, side=0.6, height=1.2, look_height=0.25):
@@ -78,7 +83,7 @@ def resolve_display_mode(config, override=None):
 
 # 程序主函数
 def main(selection="user", headless=False, short_exec=False, follow_camera=True, show_route_map=True,
-         show_map_waypoints=True, display_mode=None):
+         show_map_waypoints=True, display_mode=None, config_data=None, wait_for_map=True):
     """
     Plan and execute one fixed-point TurtleBot episode in the same Gibson scene.
     headless disables the GUI; short_exec limits the environment and controller to 10 steps.
@@ -93,8 +98,11 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
     # 读取此脚本所在目录中的yaml文件
     config_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixed_point_path.yaml")
     print("实际读取的配置文件：", config_filename)
-    with open(config_filename, "r", encoding="utf-8") as config_file:
-        config_data = yaml.safe_load(config_file)
+    if config_data is None:
+        with open(config_filename, "r", encoding="utf-8") as config_file:
+            config_data = yaml.safe_load(config_file)
+    else:
+        config_data = copy.deepcopy(config_data)
     if not isinstance(config_data, dict) or config_data.get("scene") != "gibson" or config_data.get("build_graph") is not True:
         raise ValueError("Execution requires scene: gibson and build_graph: true")
     floor = config_data.get("floor_num", 0)
@@ -142,8 +150,11 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
     config_data["enable_pbr"] = False
 
     # Quad mode renders its own three cameras and owns one preview window.
-    env = iGibsonEnv(config_file=config_data,
-                     mode="gui_interactive" if not headless and not quad_enabled else "headless")
+    try:
+        env = iGibsonEnv(config_file=config_data,
+                         mode="gui_interactive" if not headless and not quad_enabled else "headless")
+    except Exception as exc:
+        raise EnvironmentSetupError(str(exc)) from exc
 
     route_map = None
     recorder = None
@@ -210,7 +221,8 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
             env.close()
     if route_map is not None:
         try:
-            route_map.wait_until_closed()
+            if wait_for_map:
+                route_map.wait_until_closed()
         finally:
             route_map.close()
     return summary
