@@ -15,8 +15,8 @@ pybullet_load_texture: True
 enable_shadow: false
 enable_pbr: false
 
-initial_pos: [-2.6, 2.5, 0.02072859]
-target_pos: [0.7, -0.1, -0.00876713]
+initial_pos: [-0.7, 2.3, 0.02072859]
+target_pos: [-1.0, -3.3, -0.00876713]
 output_dir: outputs/path_planning
 
 # iGibsonEnv loads a robot/task, but the plotting entry never resets or steps it.
