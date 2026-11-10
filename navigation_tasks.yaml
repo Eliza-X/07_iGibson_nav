@@ -1,15 +1,30 @@
 ﻿# 共用现有地图、机器人、规划和控制参数；单项任务禁止覆盖它们。
 base_config: fixed_point_path.yaml
-# 仅复用已有坐标提供往返候选，不代表已经验证可达或确认所属房间。
-# 确认其他房间坐标后，复制条目并填写 XYZ（米）与 RPY（弧度）。
+# 截图坐标按从 0 开始的（列，行）换算，假设地图为 100×100、分辨率为 0.1 米/格。
+# XY = ((列 - 50) * 0.1, (行 - 50) * 0.1)；实际地图尺寸及可达性尚待确认。
+# Z 无法由二维栅格确定，起终点高度和初始朝向暂沿用原正向任务配置，待场景验证。
 tasks:
-  - id: existing_forward
-    description: 现有起终点正向候选，待场景验证
-    initial_pos: [0.5, -2.5, 0.02072859]
+  - id: screenshot_task_1
+    description: 在中部开阔区域短距离横向移动
+    # Start (34, 56) -> Goal (53, 55)
+    initial_pos: [-1.6, 0.6, 0.02072859]
     initial_orn: [0.0, 0.0, 1.57079632679]
-    target_pos: [-0.3, 0.3, -0.00876713]
-  - id: existing_reverse
-    description: 现有起终点反向候选，待场景验证
-    initial_pos: [-0.3, 0.3, -0.00876713]
+    target_pos: [0.3, 0.5, -0.00876713]
+  - id: screenshot_task_2
+    description: 从左侧区域出发，穿过中部，到达右上方
+    # Start (19, 58) -> Goal (61, 20)
+    initial_pos: [-3.1, 0.8, 0.02072859]
     initial_orn: [0.0, 0.0, 1.57079632679]
-    target_pos: [0.5, -2.5, 0.02072859]
+    target_pos: [1.1, -3.0, -0.00876713]
+  - id: screenshot_task_3
+    description: 从左下方窄通道驶出，进入中部开阔区域
+    # Start (24, 75) -> Goal (57, 49)
+    initial_pos: [-2.6, 2.5, 0.02072859]
+    initial_orn: [0.0, 0.0, 1.57079632679]
+    target_pos: [0.7, -0.1, -0.00876713]
+  - id: screenshot_task_4
+    description: 从底部支路出发，先向右绕行，再向上进入顶部横廊
+    # Start (43, 73) -> Goal (40, 17)
+    initial_pos: [-0.7, 2.3, 0.02072859]
+    initial_orn: [0.0, 0.0, 1.57079632679]
+    target_pos: [-1.0, -3.3, -0.00876713]
