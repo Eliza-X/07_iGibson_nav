@@ -1,0 +1,12 @@
+# Independent inspection scene; no navigation task is run.
+robot_position: [-1.5, -2.0, 0.15]
+robot_yaw: 1.57079632679
+target_position: [1.5, 2.0, 0.02]
+camera_position: [7.0, -9.0, 9.0]
+camera_target: [0.0, 0.0, 0.4]
+camera_step: 0.20
+image_width: 1024
+image_height: 768
+door_open_angle: 1.57079632679
+door_speed: 0.5
+door_force: 40.0
