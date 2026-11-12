@@ -35,7 +35,15 @@ def test_door_has_physical_leaf_and_fixed_building():
 def test_door_status_requires_feedback_not_just_a_command():
     class Physics:
         POSITION_CONTROL = 2
+        ACTIVATION_STATE_WAKE_UP = 4
         angle = 0.0
+
+        def changeDynamics(self, body, link, **kwargs):
+            assert kwargs["activationState"] == self.ACTIVATION_STATE_WAKE_UP
+            self.awake_links.add(link)
+
+        def __init__(self):
+            self.awake_links = set()
 
         def getNumJoints(self, body):
             return 1
@@ -44,6 +52,7 @@ def test_door_status_requires_feedback_not_just_a_command():
             return (0, b"door_hinge")
 
         def setJointMotorControl2(self, body, joint, mode, **kwargs):
+            assert self.awake_links == {-1, 0}
             self.command = kwargs
 
         def getJointState(self, body, joint):
@@ -75,10 +84,13 @@ def test_physical_door_opens_clears_passage_and_resets(tmp_path):
     try:
         p.setGravity(0, 0, -9.8)
         p.setTimeStep(1 / 240)
-        body = p.loadURDF(str(path))
+        body = p.loadURDF(str(path), flags=p.URDF_ENABLE_SLEEPING)
         door = DoorController(p, body, load_config(ROOT / "interaction_scene.yaml"))
         assert p.getDynamicsInfo(body, -1)[0] == 0
         assert p.rayTest([0, -1, 0.3], [0, 1, 0.3])[0][1] == door.joint
+        # Reproduce opening after the user has left the inspection scene idle.
+        for link in range(-1, p.getNumJoints(body)):
+            p.changeDynamics(body, link, activationState=p.ACTIVATION_STATE_SLEEP)
         door.open_door()
         for _ in range(120):
             p.stepSimulation()

@@ -114,6 +114,11 @@ class DoorController:
 
     def _command(self, angle):
         self.target = angle
+        # iGibson loads ArticulatedObject with sleeping enabled. A motor
+        # target alone may leave an idle multibody asleep at its old angle.
+        for link in range(-1, self.p.getNumJoints(self.body)):
+            self.p.changeDynamics(self.body, link,
+                                  activationState=self.p.ACTIVATION_STATE_WAKE_UP)
         self.p.setJointMotorControl2(self.body, self.joint, self.p.POSITION_CONTROL,
                                     targetPosition=angle, force=self.config["door_force"],
                                     maxVelocity=self.config["door_speed"])
