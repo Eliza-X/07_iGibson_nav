@@ -167,7 +167,7 @@ def load_config(path):
     return config
 
 
-def run(config, steps=None, headless=False):
+def run(config, steps=None, headless=False, episode=None):
     # Delay heavy imports so --help and geometry tests work without iGibson.
     import cv2
     import pybullet as p
@@ -211,6 +211,8 @@ def run(config, steps=None, headless=False):
                 sim.sync(force_sync=True)
 
             reset()
+            if episode is not None:
+                episode.begin(sim, robot, door, p)
             camera = FreeCamera(config)
             if not headless:
                 cv2.namedWindow(WINDOW, cv2.WINDOW_AUTOSIZE)
@@ -229,9 +231,15 @@ def run(config, steps=None, headless=False):
             frame_count = 0
             while steps is None or frame_count < steps:
                 started = time.monotonic()
+                if episode is not None:
+                    episode.before_step()
                 sim.step()
+                if episode is not None:
+                    episode.after_step()
                 frame_count += 1
                 if headless:
+                    if episode is not None and episode.task.done:
+                        break
                     continue
                 sim.renderer.set_camera(camera.position, camera.position + camera.direction, [0, 0, 1])
                 rgb = sim.renderer.render(modes=("rgb",))[0][:, :, :3]
@@ -240,6 +248,9 @@ def run(config, steps=None, headless=False):
                           "O: open door | C: close door | R: reset scene | Esc: exit",
                           "Room A: blue floor / robot | Room B: sand floor / green goal",
                           f"Door: {door.status} | angle: {math.degrees(door.angle):.1f} deg"]
+                if episode is not None:
+                    labels = [labels[0], "Autonomous task | Esc: stop and exit"] + episode.labels()
+                    episode.draw(frame, cv2)
                 for i, line in enumerate(labels):
                     cv2.putText(frame, line, (15, 25 + i * 25), cv2.FONT_HERSHEY_SIMPLEX,
                                 0.52, (0, 0, 0), 3, cv2.LINE_AA)
@@ -249,8 +260,15 @@ def run(config, steps=None, headless=False):
                 key = cv2.waitKey(max(1, int((1 / 30 - (time.monotonic() - started)) * 1000))) & 0xFF
                 if key == 27 or cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1:
                     break
+                if episode is not None and episode.task.done:
+                    break
                 char = chr(key).lower()
-                if char == "o":
+                if episode is not None:
+                    if char == "v":
+                        camera.reset()
+                    else:
+                        camera.move(char)
+                elif char == "o":
                     door.open_door()
                 elif char == "c":
                     door.close_door()
@@ -261,10 +279,16 @@ def run(config, steps=None, headless=False):
                 else:
                     camera.move(char)
         finally:
-            if sim is not None:
-                sim.disconnect()
-            if not headless:
-                cv2.destroyAllWindows()
+            try:
+                if episode is not None:
+                    episode.finish()
+            finally:
+                try:
+                    if sim is not None:
+                        sim.disconnect()
+                finally:
+                    if not headless:
+                        cv2.destroyAllWindows()
 
 
 def main(argv=None):

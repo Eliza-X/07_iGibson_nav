@@ -1,5 +1,8 @@
 # 双房间交互测试场景
 
+自主交互导航入口现为 `python run_interaction_nav.py`，配置、四种验收场景和日志说明见
+[INTERACTION_NAV.md](INTERACTION_NAV.md)。本文件中的 `interaction_scene.py` 仍用于手动场景观察。
+
 ## 开门后角度仍为 0 的排查
 
 `OPENING / BLOCKED` 是“已请求打开，但实际关节角度尚未到目标”的合并提示，
