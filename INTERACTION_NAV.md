@@ -5,6 +5,33 @@
 
 ## 运行
 
+### 先生成单张交互路径图（不运行机器人）
+
+```bash
+python plot_interaction_path.py
+# 仅保存，不弹出窗口
+python plot_interaction_path.py --no-show
+# 检查通道受阻的规划结果
+python plot_interaction_path.py --scenario blocked --no-show
+```
+
+该入口仅需要 NumPy、PyYAML 和 Matplotlib，不加载 iGibson/PyBullet。
+复用任务的配置、地图、A* 和路径简化，在一张俯视图中显示蓝色第一段导航、
+橙色停车/开门/通行确认动作、绿色第二段导航（穿门并到达目标）。
+关闭门板用虚线，计划打开位置用实线，扇形表示开门扫掠区域。
+灰色膨胀范围按计划开门角度绘制，绿色路径必须在实际角度和通道检查通过后才能执行。
+
+默认保存 `outputs/interaction_planning/interaction_plan_closed.png` 和同名 JSON，
+其他场景使用各自的后缀；同场景重复生成会覆盖。JSON 包含分段航点、路径长度、
+交互位置、动作顺序和执行条件。可通过 `--output-dir` 指定其他目录。
+图中文字采用英文，以兼容未安装中文字体的仿真环境。
+
+这是基于精确配置点的条件规划，不是实际轨迹；执行时系统会从测得的位姿重新规划。
+若通道受阻，不绘制第二段可执行路径，并以红字说明原因；`jammed` 场景保留
+假设开门后的几何路径，但明确标注开门会失败、绿色路线仅为假设。
+
+### 运行自主任务
+
 在能运行 `interaction_scene.py` 的 iGibson 2.x 环境中，从项目目录执行：
 
 ```bash
