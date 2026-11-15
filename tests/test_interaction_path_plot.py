@@ -12,6 +12,10 @@ def test_plan_segments_match_runtime_map_and_interaction():
     scene, result = plan_interaction(config)
     assert result['errors'] == []
     assert result['geometrically_complete']
+    assert np.isclose(sum(s['length_m'] for s in result['segments']), 4.0)
+    for segment in result['segments']:
+        assert len(segment['points']) == 2
+        np.testing.assert_allclose(np.asarray(segment['points'])[:, 0], 0, atol=1e-8)
     assert [s['name'] for s in result['segments']] == ['approach', 'crossing', 'to_goal']
     for index, segment in enumerate(result['segments']):
         scene.update(0 if index == 0 else config['door_open_angle'])

@@ -16,12 +16,34 @@ from interaction_scene import ROOT, load_config as load_scene_config, run
 from interaction_task import InteractionTask
 
 
+def validate_straight_task(config):
+    """Validate the centerline task for the fixed doorway at (0, 0)."""
+    points = []
+    for name, dimension in (('robot_position', 3), ('door_wait_point', 2),
+                            ('door_exit_point', 2), ('target_position', 3)):
+        value = np.asarray(config[name], float)
+        if value.shape != (dimension,) or not np.isfinite(value).all():
+            raise ValueError(name + ' must contain finite coordinates')
+        points.append(value[:2])
+    start, wait, exit_point, goal = points
+    if not np.allclose(np.asarray(points)[:, 0], 0.0, rtol=0, atol=1e-8):
+        raise ValueError('Straight task points must lie on doorway centerline x=0')
+    if not start[1] < wait[1] < 0 < exit_point[1] < goal[1]:
+        raise ValueError('Straight task requires start < wait < door < exit < goal along Y')
+    yaw = config['robot_yaw']
+    expected = math.atan2(goal[1] - start[1], goal[0] - start[0])
+    if not math.isfinite(yaw) or abs(math.atan2(math.sin(yaw - expected),
+                                               math.cos(yaw - expected))) > 1e-8:
+        raise ValueError('Initial robot yaw must face the goal')
+
+
 def load_config(path, scenario=None):
     path = Path(path).resolve()
     with path.open(encoding='utf-8') as stream:
         nav = yaml.safe_load(stream)
     config = load_scene_config(path.parent / nav['scene_config'])
     config.update(nav)
+    validate_straight_task(config)
     if scenario is not None:
         config['scenario'] = scenario
     if config['scenario'] not in ('closed', 'open', 'jammed', 'blocked'):

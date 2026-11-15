@@ -6,7 +6,20 @@ import pytest
 from interaction_map import InteractionMap
 from interaction_scene import ROOT
 from interaction_task import InteractionTask
-from run_interaction_nav import load_config, obstacle_contacts
+from run_interaction_nav import load_config, obstacle_contacts, validate_straight_task
+
+
+@pytest.mark.parametrize('key,value,message', [
+    ('robot_position', [0.5, -2, 0.15], 'centerline'),
+    ('door_wait_point', [0, -2.5], 'along Y'),
+    ('target_position', [0, float('nan'), 0.02], 'finite'),
+    ('robot_yaw', 0, 'face the goal'),
+])
+def test_straight_task_rejects_invalid_geometry(key, value, message):
+    config = load_config(ROOT / 'interaction_nav.yaml')
+    config[key] = value
+    with pytest.raises(ValueError, match=message):
+        validate_straight_task(config)
 
 
 class Door:
