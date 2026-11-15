@@ -117,7 +117,7 @@ class InteractionTask:
             self.fail('route_obstructed')
             return zero
         distance, angle = compute_target_error(pose, target)
-        action = compute_action(distance, angle, self.tracker.current_tolerance, 'shortest')
+        action = compute_action(distance, angle, self.tracker.current_tolerance, 'left')
         action[0] = min(action[0], c['crossing_action_limit'] if self.state == 'CROSSING' else c['forward_action_limit'])
         action[1] *= c['angular_action_sign']
         return action
