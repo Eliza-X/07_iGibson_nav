@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import math
 import numpy as np
 from astar_planner import astar_grid
+from .door import HINGE, LEAF_CENTER, LEAF_SIZE, OPEN_ANGLE
 
 # Shared by the physical scene and rasterizer: xmin, ymin, xmax, ymax.
 WALLS = ((-4.1,-3.1,4.1,-2.9), (-4.1,2.9,4.1,3.1),
@@ -14,7 +15,7 @@ WALLS = ((-4.1,-3.1,4.1,-2.9), (-4.1,2.9,4.1,3.1),
 START = (-2.5, 0.)
 GOAL = (2.5, 0.)
 CONTACT = (-.8, 0.)
-OPEN_ANGLE = -math.pi / 2
+EXIT = (1.8, 0.)
 
 @dataclass(frozen=True)
 class Snapshot:
@@ -45,11 +46,20 @@ class NavigationMap:
         for x0,y0,x1,y1 in WALLS:
             occupied |= (x >= x0-margin)&(x <= x1+margin)&(y >= y0-margin)&(y <= y1+margin)
         # Door local rectangle: hinge (0,-.7), width .08, length 1.4.
-        dx, dy = x, y + .7
+        dx, dy = x-HINGE[0], y-HINGE[1]
         local_x = math.cos(angle)*dx + math.sin(angle)*dy
         local_y = -math.sin(angle)*dx + math.cos(angle)*dy
-        occupied |= (abs(local_x) <= .04+margin)&(local_y >= -margin)&(local_y <= 1.4+margin)
+        occupied |= (abs(local_x-LEAF_CENTER[0]) <= LEAF_SIZE[0]/2+margin)&(abs(local_y-LEAF_CENTER[1]) <= LEAF_SIZE[1]/2+margin)
+        self.angle=angle
         self.free = ~occupied
+
+    def segment_clear(self,start,end):
+        points=np.linspace(start,end,max(2,int(np.ceil(np.linalg.norm(np.asarray(end)-start)/(self.resolution/2)))+1))
+        for point in points:
+            row,col=self.to_grid(point)
+            if not (0<=row<self.free.shape[0] and 0<=col<self.free.shape[1] and self.free[row,col]):
+                return False
+        return True
 
     def to_grid(self, xy):
         col, row = np.rint((np.asarray(xy[:2])-self.origin)/self.resolution).astype(int)

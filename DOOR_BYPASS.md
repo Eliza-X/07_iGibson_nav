@@ -1,64 +1,34 @@
-# 单门捷径与绕行实验
+# 连续电机开门实验
 
-本实验从 MiniGrid 的 `interaction_cost_planner.py`、`cost_model.py` 和
-`replanning_loop.py` 迁移代价比较及反馈机制，没有导入源项目模块。
-现有 Rs 入口、任务类和配置未修改。
+自主流程固定为：接近门前 → 停稳 → 请求开门 → 验证角度和净空 → 低速通过 → 终点停稳。
+代价选择暂不启用；开门失败停止，不绕行。旧代价函数保留但不由运行入口调用。
 
-## 运行
-
-在项目根目录、已安装 iGibson 及 TurtleBot 资产的 Python 环境中运行：
+## 使用
 
 ```powershell
-python run_door_bypass.py --plan-only
+python run_door_bypass.py --inspect-door
+python run_door_bypass.py
 python run_door_bypass.py --headless
-python run_door_bypass.py --headless --open-seconds 100
-python run_door_bypass.py --headless --initially-open
-python run_door_bypass.py --headless --fail-open
-```
-
-去掉 `--headless` 使用 iGibson GUI。`--plan-only` 只验证几何和代价，不代表物理验证。
-原生 `Viewer` 和 `RobotView` 可拖动边框调整尺寸。显示适配器先将场景等比例
-放入窗口，再绘制固定像素字号的文字；多余区域留黑边，鼠标坐标转换回渲染坐标。
-默认渲染为 1280×960，可通过 `render_width/render_height` 配置。
-Rs 的 classic 模式也启用相同适配，通过 `viewer_render_width/viewer_render_height`
-设置分辨率（默认 1280×960），video 模式沿用原配置。
-适配仅作用于当前 Viewer 实例，不修改安装的 iGibson 或全局 OpenCV 显示函数。
-扩大窗口超过源图像尺寸不会生成更多细节。原生录像保持源图像尺寸及其文字。
-每次实际运行在 `outputs/door_bypass/时间戳` 保存配置、URDF 和 JSONL 日志。
-不自动下载资产或修改安装的 iGibson。
-
-## 只观察场景
-
-```powershell
+python run_door_bypass.py --initially-open
+python run_door_bypass.py --fail-open
 python run_door_bypass.py --preview
-python run_door_bypass.py --preview --initially-open
 ```
 
-预览加载并重置一次环境后冻结物理状态，不运行导航、开门策略或 episode 循环。
-使用独立 Tk 窗口（需要 tkinter 和 Pillow），不打开原生查看器。
-鼠标拖动窗口边框或最大化时，图像等比例放大/缩小，多余区域留黑边，不拉伸。
-左键拖动画面旋转观察视角，滚轮缩放，R 恢复视角，Esc 或关闭按钮退出。
-画面以 1280×960 渲染后缩放显示；扩大窗口不额外增加三维渲染像素。
-`--preview` 不能与 `--headless` 或 `--plan-only` 同用。
+inspect-door：机器人静止，物理仿真继续，按 O 开门、C 关门；显示实际角度。
+左键拖动视角，滚轮缩放，R 恢复视角，Esc 退出。preview 仍为冻结预览。
+plan-only 只打印固定流程；open-seconds 参数已移除。
 
-## 接口与实验约定
+## 实现与验证
 
-- `planning.py`：米制 XY / 行列转换、带净空的地图、完整路线时间估计。
-- `scene.py`：同一墙体定义生成物理场景；独立关节门用 iGibson 对象导入渲染器。
-- `runtime.py`：通过环境子类加载新任务；唯一 runner 调用 reset 和 step。
-- 复用当前 `astar_grid`、`WaypointTracker`、`compute_action`，不复用整段 episode 控制器。
-- 假设开门地图只用于估价；真实地图由实际门关节角度生成。
-- 软件开门是等待指定服务时间后直接设置关节，不模拟机械臂或门的连续扫掠过程。
-  触发点位于门扇扫掠范围外。开门后的占据仍包含门扇。
-- 第一版单层、固定几何、单门、无箱子；碰撞终止，卡住可重规划，开门失败转绕行。
-- 到达终点才成功，门前目标不修改任务终点；不计算动态场景定义尚未确定的 SPL。
-- `estimated_speed` 是代价模型标定参数，不是归一化底盘动作的物理速度保证。
-  `clearance_radius` 应覆盖实际机器人外形及安全余量。
+参考 feature/interaction 的橙色门板、黄色识别条、惯性及电机唤醒逻辑。
+门宽 1.34 m、高 2.2 m；为适配当前隔墙方向，门轴为 (0,-0.67,0.03)，打开角度为 -90 度。
+墙高 2.5 m，门洞带过梁。默认速度 0.5 rad/s，驱动力参数 40。
+运行期间不使用 resetJointState；直接设置关节仅用于初始化。
+地图和物理模型共用几何定义，按实际门角度更新。
+通行时检查净空，限制前进动作，并检查全部机器人 links 与门的接触。
+日志保存到 outputs/door_bypass/时间戳，含门角度、门扇位姿、碰撞包围盒及接触数。
+窗口继续支持等比例缩放和固定文字，默认渲染 1280×960。
 
-## 验证边界
-
-开发机器可读取 `D:/Projects/A_iGibson/iGibson` 源码，但检查时当前 Python
-及 `D:/AnacondaInstall/envs/igibson/python.exe` 均不能导入 igibson。
-因此目前完成规划测试与运动学替身闭环测试，尚未完成真实 iGibson 仿真验收。
-首次实际运行需核实动作符号、机器人尺寸、门的渲染/碰撞及导航耗时。
-运动学替身测试不验证物理接触、碰撞或渲染。
+本机所检查的 Python 环境不能导入 iGibson，尚未完成物理验收。
+自动测试覆盖电机命令、地图阻挡和状态转换，不能代替实际碰撞/渲染验证。
+请先手动检查门连续转动且显示同步，再验证关门阻挡、开门通过和失败停止。

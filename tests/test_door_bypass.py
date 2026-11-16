@@ -4,6 +4,10 @@ import numpy as np
 import yaml
 from interactive_nav.planning import NavigationMap, Snapshot, START, GOAL, CONTACT, OPEN_ANGLE, choose_plan
 from interactive_nav.runtime import run_episode
+from interactive_nav.execution import DoorTraversal
+from interactive_nav.door import DoorController, door_urdf
+from types import SimpleNamespace
+import xml.etree.ElementTree as ET
 
 def config():
     return yaml.safe_load((Path(__file__).parents[1]/'door_bypass.yaml').read_text())
@@ -24,31 +28,59 @@ def test_maps_and_failed_door():
     assert len(choose_plan(Snapshot((*START,0),OPEN_ANGLE,1),cfg)[1])==1
     assert np.allclose(opened.to_world(opened.to_grid(CONTACT)),CONTACT)
 
-class FakeEnv:
-    """Kinematic test double: tests sequencing, not iGibson physics or control scaling."""
-    def __init__(self,cfg):
-        self.cfg=cfg; self.resets=0; self.steps=0; self.pose=np.array([*START,0.])
-        self.robots=[self]; self.door_scene=self; self.angle=0.; self.version=0
-        self.action_space=type('Space',(),dict(low=np.array([-1.,-1.]),high=np.array([1.,1.])))()
-    def get_position(self): return np.array([*self.pose[:2],0.])
-    def get_rpy(self): return [0,0,self.pose[2]]
-    def reset(self): self.resets+=1
-    def set_open(self,opened): self.angle=OPEN_ANGLE if opened else 0.; self.version+=1
-    def verified_open(self): return abs(self.angle-OPEN_ANGLE)<.05
-    def step(self,action):
-        self.steps+=1
-        self.pose[2]+=action[1]*self.cfg['angular_action_sign']*self.cfg['dt']
-        self.pose[:2]+=action[0]*self.cfg['dt']*np.array([np.cos(self.pose[2]),np.sin(self.pose[2])])
-        success=np.linalg.norm(self.pose[:2]-GOAL)<self.cfg['goal_tolerance']
-        return {},0.,success,dict(reason='success' if success else '',success=success)
+def test_motor_command_wakes_without_teleport():
+    calls=[]
+    physics=SimpleNamespace(getNumJoints=lambda body:1,getJointInfo=lambda body,i:(0,b'door_hinge'),
+        ACTIVATION_STATE_WAKE_UP=4,POSITION_CONTROL=2,
+        changeDynamics=lambda *a,**kw:calls.append(('wake',a,kw)),
+        setJointMotorControl2=lambda *a,**kw:calls.append(('motor',a,kw)))
+    door=DoorController(physics,7,config()); door.request(True)
+    assert [c[0] for c in calls]==['wake','wake','motor']
+    assert calls[-1][2]['maxVelocity']==.5
+    root=ET.fromstring(door_urdf())
+    assert root.find("link[@name='door_leaf']/collision") is not None
+    assert root.find("joint[@name='door_hinge']").get('type')=='revolute'
 
-def test_runner_open_and_failure_recovery(tmp_path):
-    for fail in (False,True):
-        cfg=config(); cfg['fail_open']=fail
-        env=FakeEnv(cfg)
-        result=run_episode(env,cfg,tmp_path/str(fail))
-        assert result['success']
-        assert env.resets==1
-        assert result['open_attempts']==1
-        assert result['replans']==2
-        assert env.verified_open() != fail
+def test_wait_for_physical_open_and_passage_loss():
+    cfg=config(); requests=[]
+    door=SimpleNamespace(angle=0.,request=lambda opened:requests.append(opened))
+    task=DoorTraversal(cfg,door); task.transition('STOPPING')
+    for _ in range(4): task.tick((*CONTACT,0),0,0,.1)
+    assert requests==[True] and task.state=='WAIT_FOR_DOOR'
+    assert np.all(task.tick((*CONTACT,0),0,0,.1)==0)
+    door.angle=OPEN_ANGLE
+    task.tick((*CONTACT,0),0,0,.1)
+    assert task.state=='CROSSING'
+    door.angle=0.
+    task.tick((*CONTACT,0),0,0,.1)
+    assert task.reason=='passage_lost'
+
+def test_jammed_door_stops_without_bypass():
+    cfg=config(); cfg['fail_open']=True
+    door=SimpleNamespace(angle=0.)
+    task=DoorTraversal(cfg,door); task.transition('STOPPING')
+    for _ in range(140):
+        assert np.all(task.tick((*CONTACT,0),0,0,.1)==0)
+    assert task.state=='FAILED' and task.requests==1
+
+def test_closed_door_blocks_centerline():
+    from interactive_nav.planning import EXIT
+    assert not NavigationMap().segment_clear(CONTACT,EXIT)
+    assert NavigationMap(OPEN_ANGLE).segment_clear(CONTACT,EXIT)
+
+def test_complete_traversal_requires_final_stop():
+    cfg=config(); door=SimpleNamespace(angle=OPEN_ANGLE)
+    task=DoorTraversal(cfg,door)
+    for _ in range(6): task.tick((*CONTACT,0),0,0,.1)
+    assert task.state=='CROSSING'
+    pose=(*CONTACT,0)
+    for _ in range(200):
+        task.tick(pose,0,0,.1)
+        if task.tracker and not task.tracker.completed:
+            pose=(*task.tracker.current_waypoint,0)
+        if task.state=='FINAL_STOP': break
+    assert task.state=='FINAL_STOP'
+    task.tick((*GOAL,0),1.,0,.1)
+    assert task.state=='FINAL_STOP'
+    for _ in range(4): task.tick((*GOAL,0),0,0,.1)
+    assert task.state=='SUCCESS' and task.requests==0

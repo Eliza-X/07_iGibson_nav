@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 
-def preview_scene(env):
+def preview_scene(env, interactive=False):
     import tkinter as tk
     from PIL import Image, ImageTk
 
@@ -14,6 +14,8 @@ def preview_scene(env):
     root.minsize(480, 360)
     root.resizable(True, True)
     tk.Label(root, text='Drag window edges: resize | Left drag: orbit | Wheel: zoom | R: reset view | Esc: close').pack(fill='x')
+    status=tk.Label(root,text='O: open | C: close (motorized)' if interactive else 'Frozen preview')
+    status.pack(fill='x')
     canvas = tk.Canvas(root, background='#181818', highlightthickness=0)
     canvas.pack(fill='both', expand=True)
     item = canvas.create_image(0, 0, anchor='center')
@@ -54,6 +56,11 @@ def preview_scene(env):
     errors = []
     def render():
         try:
+            if interactive:
+                env.robots[0].keep_still()
+                env.simulator.step()
+                state['dirty']=True
+                status.configure(text=f'O: open | C: close | {env.door_scene.status} | angle {math.degrees(env.door_scene.angle):.1f} deg')
             if state['dirty']:
                 az, el, distance = state['azimuth'], state['elevation'], state['distance']
                 target = np.array([0.,0.,.3])
@@ -66,7 +73,7 @@ def preview_scene(env):
                 state['frame'] = Image.fromarray(np.asarray(frame,dtype=np.uint8))
                 state['dirty'] = False
                 repaint()
-            root.after(33, render)
+            root.after(max(1,round(env.action_timestep*1000)) if interactive else 33, render)
         except Exception as exc:
             errors.append(exc)
             root.destroy()
@@ -78,6 +85,9 @@ def preview_scene(env):
     canvas.bind('<Button-4>', zoom)
     canvas.bind('<Button-5>', zoom)
     root.bind('<r>', reset)
+    if interactive:
+        root.bind('<o>',lambda event:env.door_scene.request(True))
+        root.bind('<c>',lambda event:env.door_scene.request(False))
     root.bind('<Escape>', lambda event: root.destroy())
     try:
         root.after(0, render)
