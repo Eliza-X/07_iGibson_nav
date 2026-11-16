@@ -40,7 +40,9 @@ def create_env(config, mode, output):
                   output=['task_obs'], task_obs_dim=2, initial_pos_z_offset=.1,
                   collision_ignore_link_a_ids=[1,2,3,4],
                   image_width=config.get('render_width',128),image_height=config.get('render_height',128))
-    env = DoorEnv(config_file=native,mode=mode,action_timestep=config['dt'],automatic_reset=False)
+    from viewer_windows import resizable_viewer_windows
+    with resizable_viewer_windows(mode == 'gui_interactive'):
+        env = DoorEnv(config_file=native,mode=mode,action_timestep=config['dt'],automatic_reset=False)
     try:
         env.door_scene = DoorScene(env,Path(output)/'assets')
     except BaseException:

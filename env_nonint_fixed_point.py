@@ -142,8 +142,10 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
     config_data["enable_pbr"] = False
 
     # Quad mode renders its own three cameras and owns one preview window.
-    env = iGibsonEnv(config_file=config_data,
-                     mode="gui_interactive" if not headless and not quad_enabled else "headless")
+    from viewer_windows import resizable_viewer_windows
+    with resizable_viewer_windows(not headless and not quad_enabled):
+        env = iGibsonEnv(config_file=config_data,
+                         mode="gui_interactive" if not headless and not quad_enabled else "headless")
 
     route_map = None
     recorder = None

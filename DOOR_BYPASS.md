@@ -17,6 +17,9 @@ python run_door_bypass.py --headless --fail-open
 ```
 
 去掉 `--headless` 使用 iGibson GUI。`--plan-only` 只验证几何和代价，不代表物理验证。
+原生 `Viewer` 和 `RobotView` 使用 OpenCV 的 `WINDOW_NORMAL | WINDOW_KEEPRATIO`
+模式，可拖动边框调整尺寸，画面保持比例。Rs 的 classic 入口也启用相同适配。
+此适配仅在创建环境期间改变这两个窗口的创建参数，保留 iGibson 原有鼠标操作。
 每次实际运行在 `outputs/door_bypass/时间戳` 保存配置、URDF 和 JSONL 日志。
 不自动下载资产或修改安装的 iGibson。
 
