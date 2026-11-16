@@ -38,7 +38,8 @@ def create_env(config, mode, output):
             self.task = DoorTask(self)
     native = dict(scene='empty', robot=dict(name='Turtlebot', action_type='continuous',action_normalize=True),
                   output=['task_obs'], task_obs_dim=2, initial_pos_z_offset=.1,
-                  collision_ignore_link_a_ids=[1,2,3,4])
+                  collision_ignore_link_a_ids=[1,2,3,4],
+                  image_width=config.get('render_width',128),image_height=config.get('render_height',128))
     env = DoorEnv(config_file=native,mode=mode,action_timestep=config['dt'],automatic_reset=False)
     try:
         env.door_scene = DoorScene(env,Path(output)/'assets')

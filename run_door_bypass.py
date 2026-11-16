@@ -10,11 +10,14 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config',default=str(Path(__file__).with_name('door_bypass.yaml')))
     parser.add_argument('--headless',action='store_true')
+    parser.add_argument('--preview',action='store_true',help='Inspect the frozen scene in a resizable window; no navigation')
     parser.add_argument('--plan-only',action='store_true',help='Geometry/cost check; does not run physics')
     parser.add_argument('--open-seconds',type=float)
     parser.add_argument('--initially-open',action='store_true')
     parser.add_argument('--fail-open',action='store_true')
     args=parser.parse_args()
+    if args.preview and (args.headless or args.plan_only):
+        parser.error('--preview cannot be combined with --headless or --plan-only')
     config=yaml.safe_load(Path(args.config).read_text(encoding='utf-8'))
     if args.open_seconds is not None: config['open_seconds']=args.open_seconds
     if args.initially_open: config['initially_open']=True
@@ -32,9 +35,16 @@ def main():
     output=Path(__file__).parent/'outputs'/'door_bypass'/datetime.now().strftime('%Y%m%d_%H%M%S_%f')
     output.mkdir(parents=True)
     (output/'config.json').write_text(json.dumps(config,indent=2),encoding='utf-8')
-    env=create_env(config,'headless' if args.headless else 'gui_interactive',output)
+    # Preview owns its window; suppress the native iGibson viewer.
+    if args.preview:
+        config.update(render_width=1280,render_height=960)
+    env=create_env(config,'headless' if args.headless or args.preview else 'gui_interactive',output)
     try:
-        print(json.dumps(run_episode(env,config,output),indent=2))
+        if args.preview:
+            from interactive_nav.preview import preview_scene
+            preview_scene(env)
+        else:
+            print(json.dumps(run_episode(env,config,output),indent=2))
         print('Logs:',output)
     finally:
         env.close()

@@ -20,6 +20,20 @@ python run_door_bypass.py --headless --fail-open
 每次实际运行在 `outputs/door_bypass/时间戳` 保存配置、URDF 和 JSONL 日志。
 不自动下载资产或修改安装的 iGibson。
 
+## 只观察场景
+
+```powershell
+python run_door_bypass.py --preview
+python run_door_bypass.py --preview --initially-open
+```
+
+预览加载并重置一次环境后冻结物理状态，不运行导航、开门策略或 episode 循环。
+使用独立 Tk 窗口（需要 tkinter 和 Pillow），不打开原生查看器。
+鼠标拖动窗口边框或最大化时，图像等比例放大/缩小，多余区域留黑边，不拉伸。
+左键拖动画面旋转观察视角，滚轮缩放，R 恢复视角，Esc 或关闭按钮退出。
+画面以 1280×960 渲染后缩放显示；扩大窗口不额外增加三维渲染像素。
+`--preview` 不能与 `--headless` 或 `--plan-only` 同用。
+
 ## 接口与实验约定
 
 - `planning.py`：米制 XY / 行列转换、带净空的地图、完整路线时间估计。
