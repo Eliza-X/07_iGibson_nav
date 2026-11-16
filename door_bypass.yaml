@@ -1,0 +1,13 @@
+resolution: 0.1
+clearance_radius: 0.25
+estimated_speed: 0.12
+estimated_angular_speed: 0.5
+open_seconds: 2.0
+initially_open: false
+fail_open: false
+dt: 0.1
+angular_action_sign: -1.0
+goal_tolerance: 0.12
+stall_steps: 150
+max_steps: 20000
+max_replans: 8
