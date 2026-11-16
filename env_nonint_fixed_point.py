@@ -126,6 +126,9 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
     if quad_enabled:
         config_data["image_width"] = int(config_data.get("video_panel_width", 640))
         config_data["image_height"] = int(config_data.get("video_panel_height", 480))
+    elif not headless:
+        config_data["image_width"] = int(config_data.get("viewer_render_width", 1280))
+        config_data["image_height"] = int(config_data.get("viewer_render_height", 960))
 
     from igibson.envs.igibson_env import iGibsonEnv
     from igibson.utils.assets_utils import download_assets, download_demo_data
@@ -151,6 +154,9 @@ def main(selection="user", headless=False, short_exec=False, follow_camera=True,
     recorder = None
     # 闭环控制器
     try:
+        if not headless and not quad_enabled:
+            from viewer_windows import attach_viewer_display
+            attach_viewer_display(env)
         # Validate and plan before reset: task reset itself may query the graph.
         floor_map, result = plan_path(env.scene, config_data)
         if (env.task.floor_num != floor

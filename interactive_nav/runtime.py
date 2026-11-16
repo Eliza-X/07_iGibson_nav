@@ -39,11 +39,13 @@ def create_env(config, mode, output):
     native = dict(scene='empty', robot=dict(name='Turtlebot', action_type='continuous',action_normalize=True),
                   output=['task_obs'], task_obs_dim=2, initial_pos_z_offset=.1,
                   collision_ignore_link_a_ids=[1,2,3,4],
-                  image_width=config.get('render_width',128),image_height=config.get('render_height',128))
-    from viewer_windows import resizable_viewer_windows
+                  image_width=config.get('render_width',1280),image_height=config.get('render_height',960))
+    from viewer_windows import resizable_viewer_windows, attach_viewer_display
     with resizable_viewer_windows(mode == 'gui_interactive'):
         env = DoorEnv(config_file=native,mode=mode,action_timestep=config['dt'],automatic_reset=False)
     try:
+        if mode == 'gui_interactive':
+            attach_viewer_display(env)
         env.door_scene = DoorScene(env,Path(output)/'assets')
     except BaseException:
         env.close(); raise

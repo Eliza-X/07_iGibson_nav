@@ -1,4 +1,6 @@
 resolution: 0.1
+render_width: 1280
+render_height: 960
 clearance_radius: 0.25
 estimated_speed: 0.12
 estimated_angular_speed: 0.5

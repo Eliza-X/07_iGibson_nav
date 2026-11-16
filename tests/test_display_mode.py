@@ -96,7 +96,7 @@ def test_main_selects_windows_recording_resolution_and_cleanup(monkeypatch, mode
     _, env_mode, effective = events[0]
     assert env_mode == ("gui_interactive" if mode == "classic" and not headless else "headless")
     assert effective["display_mode"] == mode
-    assert effective["image_width"] == (640 if mode == "video" else 128)
+    assert effective["image_width"] == (640 if mode == "video" else 128 if headless else 1280)
     assert effective["record_video"] is (mode == "video")
     if mode == "video":
         assert ("recorder", not headless, True) in events
