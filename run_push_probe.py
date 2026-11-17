@@ -2,6 +2,7 @@
 import argparse
 from datetime import datetime
 import json
+import math
 from pathlib import Path
 import yaml
 from interactive_nav.push_probe import validate_config, run_probe
@@ -13,7 +14,11 @@ def main():
     parser.add_argument('--headless', action='store_true')
     parser.add_argument('--mass', type=float)
     parser.add_argument('--repeats', type=int, default=1)
+    parser.add_argument('--playback-speed', type=float, default=0.5,
+                        help='Visual playback rate (default: 0.5); physics dt is unchanged')
     args = parser.parse_args()
+    if not math.isfinite(args.playback_speed) or args.playback_speed <= 0:
+        parser.error('--playback-speed must be positive and finite')
     config = yaml.safe_load(Path(args.config).read_text(encoding='utf-8'))
     if args.mass is not None:
         config['box_mass'] = args.mass
@@ -25,9 +30,12 @@ def main():
     (output/'config.json').write_text(json.dumps(config, indent=2), encoding='utf-8')
     results = []
     for i in range(args.repeats):
-        result = run_probe(config, 'headless' if args.headless else 'gui_interactive', output/f'trial_{i+1:02d}')
+        result = run_probe(config, 'headless' if args.headless else 'gui_interactive', output/f'trial_{i+1:02d}',
+                           playback_speed=args.playback_speed)
         results.append(result)
         print(json.dumps(result, indent=2))
+        if result['reason'] == 'user_closed':
+            break
     (output/'summary.json').write_text(json.dumps(results, indent=2), encoding='utf-8')
     print('Logs:', output)
 

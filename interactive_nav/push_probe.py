@@ -1,6 +1,7 @@
 """Straight pushing with measured progress, contact and settling feedback."""
 import json
 import math
+import time
 from pathlib import Path
 import numpy as np
 
@@ -114,19 +115,18 @@ def box_urdf(c):
     </link></robot>'''
 
 
-def run_probe(c, mode, output):
+def run_probe(c, mode, output, playback_speed=0.5):
     import pybullet as p
     from igibson.envs.igibson_env import iGibsonEnv
     from igibson.objects.articulated_object import ArticulatedObject
-    from viewer_windows import resizable_viewer_windows, attach_viewer_display
     output = Path(output); output.mkdir(parents=True, exist_ok=True)
     native = dict(scene='empty', robot=dict(name='Turtlebot', action_type='continuous', action_normalize=True),
-                  output=['task_obs'], task_obs_dim=0, initial_pos_z_offset=.1)
-    with resizable_viewer_windows(mode == 'gui_interactive'):
-        env = iGibsonEnv(config_file=native, mode=mode, action_timestep=c['dt'], automatic_reset=False)
+                  output=['task_obs'], task_obs_dim=0, initial_pos_z_offset=.1,
+                  image_width=1280, image_height=800)
+    # Own the display so native viewer camera updates cannot override our view.
+    env = iGibsonEnv(config_file=native, mode='headless', action_timestep=c['dt'], automatic_reset=False)
+    view = None
     try:
-        if mode == 'gui_interactive':
-            attach_viewer_display(env)
         env.reset()
         robot = env.robots[0]
         env.land(robot, [0, 0, .1], [0, 0, 0])
@@ -163,16 +163,38 @@ def run_probe(c, mode, output):
                         contacts=contacts, unexpected_contacts=unexpected)
 
         task = PushController(c)
+        if mode != 'headless':
+            from .push_view import PushView
+            view = PushView(env, observe(), c['push_distance'], playback_speed)
+            view.show(task, observe())
+            view.wait()
         with (output/'episode.jsonl').open('w', encoding='utf-8') as log:
             while task.state not in ('FAILED', 'SUCCESS'):
+                if view:
+                    view.wait()
+                    if view.closed:
+                        task.fail('user_closed')
+                        break
+                started = time.perf_counter()
                 before = observe()
                 action = task.tick(before)
                 env.step(np.clip(action, env.action_space.low, env.action_space.high).astype(np.float32))
                 log.write(json.dumps(dict(time=task.elapsed, state=task.state, action=action.tolist(), observation=before))+'\n')
+                if view:
+                    view.show(task, observe())
+                    if task.state not in ('FAILED', 'SUCCESS'):
+                        view.wait(started+c['dt']/playback_speed)
             result = dict(success=task.state == 'SUCCESS', reason=task.reason, simulated_seconds=task.elapsed,
                           displacement=task.progress, final_observation=observe())
             log.write(json.dumps(dict(type='summary', **result))+'\n')
         (output/'result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+        if view and not view.closed:
+            print(f"Result: {task.reason}. Close the window to continue. Logs: {output}")
+            view.paused = False
+            view.show(task, result['final_observation'])
+            view.wait(final=True)
         return result
     finally:
+        if view:
+            view.close()
         env.close()
