@@ -59,6 +59,10 @@ class PushView:
         self.description = (f'State: {task.state}    Contact: {"YES" if s["contacts"] else "NO"}    Time: {task.elapsed:.1f} s\n'
                             f'Box: {displacement:.3f} / {task.c["push_distance"]:.2f} m    Lateral: {lateral:+.3f} m\n'
                             f'Result: {task.reason or "running"}')
+        if hasattr(task, 'path_available'):
+            detail = task.push.state if task.state == 'INTERACT' else task.state
+            distance = np.linalg.norm(np.asarray(s['robot_position'][:2])-task.c['goal'])
+            self.description += f'\nStage: {detail}    Path: {task.path_available}    Goal distance: {distance:.2f} m'
         self.env.simulator.sync(force_sync=True)
         renderer = self.env.simulator.renderer
         renderer.set_camera(self.camera, self.target, [0, 0, 1], cache=False)

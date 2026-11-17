@@ -115,7 +115,7 @@ def box_urdf(c):
     </link></robot>'''
 
 
-def run_probe(c, mode, output, playback_speed=0.5):
+def run_probe(c, mode, output, playback_speed=0.5, navigation=False):
     import pybullet as p
     from igibson.envs.igibson_env import iGibsonEnv
     from igibson.objects.articulated_object import ArticulatedObject
@@ -140,6 +140,16 @@ def run_probe(c, mode, output, playback_speed=0.5):
         p.changeDynamics(box, -1, lateralFriction=c['box_friction'], restitution=0)
         if p.getDynamicsInfo(box, -1)[0] <= 0:
             raise RuntimeError('Box must be a dynamic body')
+        wall_ids = set()
+        if navigation:
+            from .push_scene import setup_scene
+            wall_ids = setup_scene(env, p, box, output, c)
+            robot_bounds = [p.getAABB(b, link) for b in bodies for link in range(-1, p.getNumJoints(b))]
+            robot_xy = robot.get_position()[:2]
+            measured_radius = max(np.linalg.norm(np.array([a[ix][0], a[iy][1]])-robot_xy)
+                                  for a in robot_bounds for ix in (0, 1) for iy in (0, 1))
+            if measured_radius > c['clearance_radius']:
+                raise ValueError(f'Robot footprint radius {measured_radius:.3f} exceeds clearance_radius; review layout')
         (output/'geometry.json').write_text(json.dumps(dict(robot_aabbs=bounds, box_aabb=p.getAABB(box), floor_ids=list(floor_ids)), indent=2), encoding='utf-8')
 
         def observe():
@@ -160,12 +170,22 @@ def run_probe(c, mode, output, playback_speed=0.5):
                         robot_speed=float(np.linalg.norm(robot.get_linear_velocity())),
                         robot_angular_speed=float(np.linalg.norm(robot.get_angular_velocity())),
                         box_speed=float(np.linalg.norm(linear)), box_angular_speed=float(np.linalg.norm(angular)),
-                        contacts=contacts, unexpected_contacts=unexpected)
+                        contacts=contacts, unexpected_contacts=unexpected,
+                        box_wall_contacts=[dict(wall=point[2], force=point[9]) for point in p.getContactPoints(bodyA=box)
+                                           if point[2] in wall_ids and point[8] <= 0])
 
-        task = PushController(c)
+        if navigation:
+            from .push_navigation import PushNavigation
+            task = PushNavigation(c)
+        else:
+            task = PushController(c)
         if mode != 'headless':
             from .push_view import PushView
             view = PushView(env, observe(), c['push_distance'], playback_speed)
+            if navigation:
+                view.root.title('Push navigation - closed loop')
+                view.target = np.array([0., 0., 0.])
+                view.camera = np.array([0., -6., 8.])
             view.show(task, observe())
             view.wait()
         with (output/'episode.jsonl').open('w', encoding='utf-8') as log:
@@ -178,14 +198,24 @@ def run_probe(c, mode, output, playback_speed=0.5):
                 started = time.perf_counter()
                 before = observe()
                 action = task.tick(before)
-                env.step(np.clip(action, env.action_space.low, env.action_space.high).astype(np.float32))
-                log.write(json.dumps(dict(time=task.elapsed, state=task.state, action=action.tolist(), observation=before))+'\n')
+                if task.state not in ('FAILED', 'SUCCESS'):
+                    env.step(np.clip(action, env.action_space.low, env.action_space.high).astype(np.float32))
+                    post = observe()
+                    if navigation and (post['unexpected_contacts'] or post['box_wall_contacts']):
+                        task.fail('wall_or_unexpected_collision')
+                entry = dict(time=task.elapsed, state=task.state, action=action.tolist(), observation=before)
+                if navigation:
+                    entry.update(interaction_state=task.push.state if task.push else None,
+                                 path_available=task.path_available, replans=task.replans)
+                log.write(json.dumps(entry)+'\n')
                 if view:
                     view.show(task, observe())
                     if task.state not in ('FAILED', 'SUCCESS'):
                         view.wait(started+c['dt']/playback_speed)
             result = dict(success=task.state == 'SUCCESS', reason=task.reason, simulated_seconds=task.elapsed,
                           displacement=task.progress, final_observation=observe())
+            if navigation:
+                result.update(task.diagnostics())
             log.write(json.dumps(dict(type='summary', **result))+'\n')
         (output/'result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
         if view and not view.closed:
