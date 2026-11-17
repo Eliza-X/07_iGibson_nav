@@ -206,7 +206,7 @@ def run_probe(c, mode, output, playback_speed=0.5, navigation=False):
                 entry = dict(time=task.elapsed, state=task.state, action=action.tolist(), observation=before)
                 if navigation:
                     entry.update(interaction_state=task.push.state if task.push else None,
-                                 path_available=task.path_available, replans=task.replans)
+                                 path_available=task.path_available, replans=task.replans, tracking=task.tracking)
                 log.write(json.dumps(entry)+'\n')
                 if view:
                     view.show(task, observe())

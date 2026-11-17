@@ -2,7 +2,7 @@
 import math
 import numpy as np
 from action_policy import compute_action
-from waypoint_tracker import WaypointTracker, compute_target_error
+from waypoint_tracker import WaypointTracker, compute_target_error, corner_indices
 from .push_probe import PushController
 from .push_planning import BoxMap
 
@@ -18,10 +18,26 @@ class PushNavigation:
         self.replans = 0
         self.path_available = None
         self.plans = []
+        self.tracking = None
+        self.refine_index = None
+        self.refine_since = 0.
+
+    def make_tracker(self, path, target):
+        c = self.c
+        return WaypointTracker(path, target, c['waypoint_tolerance'], c['goal_tolerance'],
+                               critical_indices=corner_indices(path),
+                               corner_tolerance=c['corner_tolerance'], fine_tolerance=c['fine_tolerance'])
+
+    def blocked(self, reason):
+        if self.state == 'NAVIGATE' and self.replans < self.c['max_replans']:
+            self.transition('REPLAN')
+        else:
+            self.fail(reason)
 
     def transition(self, state):
         self.state, self.entered, self.still = state, self.elapsed, 0.
         self.tracker = None
+        self.refine_index = None
 
     def fail(self, reason):
         self.reason = reason
@@ -32,6 +48,7 @@ class PushNavigation:
 
     def tick(self, s):
         c = self.c
+        self.tracking = None
         self.elapsed += c['dt']
         zero = np.zeros(2)
         if self.state in ('FAILED', 'SUCCESS'):
@@ -81,18 +98,34 @@ class PushNavigation:
                     self.fail('no_path')
                     return zero
                 self.plans.append(dict(stage=self.state, time=self.elapsed, path=path))
-                self.tracker = WaypointTracker(path, target, c['waypoint_tolerance'], c['goal_tolerance'])
-            self.tracker.update(pose)
+                self.tracker = self.make_tracker(path, target)
+            reached = self.tracker.update(pose, nav.segment_clear)
             if self.tracker.completed:
                 self.transition('ALIGN' if self.state == 'APPROACH' else 'FINAL_STOP')
                 return zero
-            if not nav.segment_clear(pose[:2], self.tracker.current_waypoint):
-                if self.state == 'NAVIGATE' and self.replans < c['max_replans']:
-                    self.transition('REPLAN')
-                else:
-                    self.fail('route_obstructed')
+            tracker = self.tracker
+            obstruction = nav.first_obstruction(pose[:2], tracker.current_waypoint)
+            candidate_obstruction = (nav.first_obstruction(pose[:2], tracker.blocked_target)
+                                     if tracker.blocked_target is not None else None)
+            distance, angle = compute_target_error(pose, tracker.current_waypoint)
+            self.tracking = dict(index=tracker.index, target=tracker.current_waypoint.tolist(),
+                                 critical=tracker.index in tracker.critical_indices, distance=distance,
+                                 reached=reached, refining=tracker.refining, corner_pause=tracker.corner_pause,
+                                 obstruction=obstruction, candidate_obstruction=candidate_obstruction,
+                                 blocked_target=tracker.blocked_target.tolist() if tracker.blocked_target is not None else None)
+            if tracker.refining:
+                if self.refine_index != tracker.index:
+                    self.refine_index, self.refine_since = tracker.index, self.elapsed
+            else:
+                self.refine_index = None
+            if obstruction or tracker.blocked_at_precision or (tracker.refining and self.elapsed-self.refine_since > c['refine_timeout']):
+                self.tracking['decision'] = 'stop_and_replan_or_fail'
+                self.blocked('route_obstructed' if obstruction else 'corner_refinement_blocked')
                 return zero
-            distance, angle = compute_target_error(pose, self.tracker.current_waypoint)
+            if tracker.corner_pause:
+                self.tracking['decision'] = 'corner_pause'
+                return zero
+            self.tracking['decision'] = 'refine' if tracker.refining else 'follow'
             action = compute_action(distance, angle, self.tracker.current_tolerance, 'shortest')
             action[1] *= c['angular_action_sign']
             return action
@@ -155,7 +188,7 @@ class PushNavigation:
                 self.path_available = True
                 self.plans.append(dict(stage='REPLAN', time=self.elapsed, path=path))
                 self.transition('NAVIGATE')
-                self.tracker = WaypointTracker(path, c['goal'], c['waypoint_tolerance'], c['goal_tolerance'])
+                self.tracker = self.make_tracker(path, c['goal'])
             elif np.linalg.norm(np.array(pose[:2])-c['goal']) < c['goal_tolerance']:
                 self.reason = 'success'
                 self.transition('SUCCESS')

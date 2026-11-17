@@ -14,6 +14,9 @@ resolution: 0.05
 clearance_radius: 0.28
 goal_tolerance: 0.10
 waypoint_tolerance: 0.06
+corner_tolerance: 0.025
+fine_tolerance: 0.005
+refine_timeout: 8.0
 align_tolerance: 0.04
 navigation_timeout: 180.0
 release_timeout: 20.0

@@ -29,6 +29,8 @@ def load_config(path):
         raise ValueError('Doorway must admit both robot and box')
     if c['release_action'] > 1 or int(c['max_replans']) != c['max_replans']:
         raise ValueError('Invalid release action or replan count')
+    if not 0 < c['fine_tolerance'] < c['corner_tolerance'] <= c['waypoint_tolerance']:
+        raise ValueError('Require 0 < fine_tolerance < corner_tolerance <= waypoint_tolerance')
     return c
 
 

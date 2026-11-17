@@ -36,6 +36,15 @@ class BoxMap(NavigationMap):
             raise ValueError('Path endpoint connection is obstructed')
         return path
 
+    def first_obstruction(self, start, end):
+        start, end = np.asarray(start[:2]), np.asarray(end[:2])
+        count = max(2, int(np.ceil(np.linalg.norm(end-start)/(self.resolution/2)))+1)
+        for point in np.linspace(start, end, count):
+            row, col = self.to_grid(point)
+            if not (0 <= row < self.free.shape[0] and 0 <= col < self.free.shape[1] and self.free[row, col]):
+                return dict(point=point.tolist(), cell=[row, col])
+        return None
+
 
 def check_layout(c):
     nav = BoxMap(c, c['box_position'], 0.)

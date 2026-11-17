@@ -45,3 +45,19 @@ result with actual planned paths and replan count. JSONL observations are taken
 before each action. Simulation state-machine tests are synthetic feedback tests;
 they do not establish physical success. Run at least three actual trials after
 the first visual check. Existing door and standalone probe entry points remain.
+
+## Corner tracking
+
+This task enables mandatory direction-change waypoints. Ordinary waypoint
+tolerance remains 0.06 m; corners require 0.025 m. Every attempted advance
+checks the actual-position-to-next-target segment. If that connection is
+blocked, retain the current target and refine toward it with 0.005 m tolerance.
+Unsafe current segments, exhausted precision or 8 seconds of continuous
+refinement trigger a stopped, bounded replan (or failure during approach).
+Reaching a corner issues one zero-action cycle before continuing; it is not
+a claim of fully settled physical motion. Existing heading control then turns
+toward the next target. These values still require physical validation.
+
+Step logs include `tracking`: selected waypoint/index, critical flag, distance,
+consumed indices, refinement/pause flags, proposed blocked target, first blocked
+sample/cell, and decision. Other tasks retain the original tracker defaults.
